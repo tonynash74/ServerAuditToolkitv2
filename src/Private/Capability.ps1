@@ -11,6 +11,7 @@ function Get-SATCapability {
     HasNetTCPIP       = (Get-Module -ListAvailable -Name NetTCPIP)
     HasNetLbfo        = (Get-Module -ListAvailable -Name NetLbfo)
     HasStorage        = (Get-Module -ListAvailable -Name Storage)
+    HasPrintModule   = (Get-Module -ListAvailable -Name PrintManagement)
     HasScheduledTasks = (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)
     HasLocalAccounts  = (Get-Command Get-LocalUser -ErrorAction SilentlyContinue) # Win 10/2016+
     RemotingOn        = (Get-Service WinRM -ErrorAction SilentlyContinue)?.Status -eq 'Running'

@@ -3,6 +3,8 @@
 . $PSScriptRoot\Private\Parallel.ps1
 . $PSScriptRoot\Private\Capability.ps1
 . $PSScriptRoot\Private\Report.ps1
+. $PSScriptRoot\Private\Migration.ps1
+
 
 # Dot-source collectors
 Get-ChildItem "$PSScriptRoot\Collectors\*.ps1" | ForEach-Object { . $_.FullName }
@@ -60,4 +62,22 @@ function Invoke-ServerAudit {
   }
   return $results
 }
+# Build Migration Units
+$units = New-SATMigrationUnits -Data $results
+
+# Load rules (use default for now; later add -RulesPath param to Invoke-ServerAudit)
+$rules = Get-SATDefaultReadinessRules
+$findings = Evaluate-SATReadiness -Units $units -Rules $rules
+
+# Persist MU + findings (JSON + CSV)
+$muJson = Join-Path $OutDir "migration_units_$ts.json"
+$units | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path $muJson
+
+$csvDir = Join-Path $OutDir 'csv'; New-Item -ItemType Directory -Force -Path $csvDir | Out-Null
+$units | Select Id,Kind,Server,Name,Summary,Confidence | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'migration_units.csv')
+$findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'readiness_findings.csv')
+
+# Render report (pass Units & Findings along)
+$report = New-SATReport -Data $results -Units $units -Findings $findings -OutDir $OutDir -Timestamp $ts -Verbose:$VerbosePreference
+
 Export-ModuleMember -Function Invoke-ServerAudit,Get-SAT*

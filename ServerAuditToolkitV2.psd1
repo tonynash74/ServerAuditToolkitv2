@@ -8,7 +8,7 @@
   FunctionsToExport = @(
     'Invoke-ServerAudit',
     'Get-SATSystem','Get-SATRolesFeatures','Get-SATNetwork','Get-SATStorage',
-    'Get-SATADDS','Get-SATDNS','Get-SATDHCP','Get-SATIIS','Get-SATHyperV',
+    'Get-SATADDS','Get-SATDNS','Get-SATDHCP','Get-SATIIS','Get-SATPrinters','Get-SATHyperV',
     'Get-SATCertificates','Get-SATScheduledTasks','Get-SATLocalAccounts'
   )
   PrivateData = @{
