@@ -1,0 +1,2 @@
+"Server","Name","State","AppPool","PhysicalPath","Bindings"
+"srv1","Default Web Site","Started","DefaultAppPool","C:\inetpub\wwwroot","http|*:80:"

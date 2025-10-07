@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SATv2 Report 20251007_153626</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  .table { font-size: 0.9rem; }
+  .truncate { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body class="bg-light">
+<div class="container my-4">
+  <h1 class="mb-3">ServerAuditToolkitV2 – Migration Readiness</h1>
+  <p class="text-muted">Run: 20251007_153626</p>
+
+  <div class="alert alert-info">
+    <strong>High-level findings</strong>
+    <ul>
+      <li>IIS migration required on 1 server(s): 1 site(s).</li>
+<li>Hyper-V migration required on 1 host(s): 1 VM(s).</li>
+<li>File server migration required: 1 share(s) across 1 server(s).</li>
+<li>Certificates discovered: 1. Expiring in <120 days: 1.</li>
+    </ul>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Inventory footprint</h5>
+          <ul class="mb-0">
+            <li>Servers: 1</li>
+            <li>IIS: 1 site(s), 1 pool(s)</li>
+            <li>Hyper-V: 1 VM(s)</li>
+            <li>SMB: 1 share(s)</li>
+            <li>Volumes/Disks: 1/1</li>
+            <li>Local users/groups: 1/1</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Quick links</h5>
+          <ul>
+            <li><a href='./csv/iis_sites.csv'>IIS Sites CSV</a></li>
+            <li><a href='./csv/iis_pools.csv'>IIS AppPools CSV</a></li>
+            <li><a href='./csv/hyperv_vms.csv'>Hyper-V VMs CSV</a></li>
+            <li><a href='./csv/smb_shares.csv'>SMB Shares CSV</a></li>
+            <li><a href='./csv/smb_ntfs_top.csv'>Top-level NTFS ACL CSV</a></li>
+            <li><a href='./csv/certificates.csv'>Certificates CSV</a></li>
+            <li><a href='./csv/network_adapters.csv'>Network Adapters + IPs CSV</a></li>
+            <li><a href='./csv/storage_volumes.csv'>Storage Volumes CSV</a></li>
+            <li><a href='./csv/storage_disks.csv'>Storage Disks CSV</a></li>
+            <li><a href='./csv/local_users.csv'>Local Users CSV</a></li>
+            <li><a href='./csv/local_groups.csv'>Local Groups CSV</a></li>
+            <li><a href='./csv/local_group_members.csv'>Local Group Members CSV</a></li>
+            <li><a href='./data_20251007_153626.json'>Raw JSON</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="my-4"/>
+
+  <h3>IIS Overview</h3>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>Server</th><th>Site</th><th>State</th><th>App Pool</th><th>Bindings</th><th>Path</th></tr></thead>
+    <tbody>
+      <tr><td>srv1</td><td>Default Web Site</td><td>Started</td><td>DefaultAppPool</td><td class='truncate' title='http|*:80:'>http|*:80:</td><td class='truncate' title='C:\inetpub\wwwroot'>C:\inetpub\wwwroot</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="mt-4">Hyper-V Overview</h3>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>Host</th><th>VM</th><th>State</th><th>Memory</th><th>CPU %</th><th>Uptime</th><th>Gen</th></tr></thead>
+    <tbody>
+      <tr><td>srv1</td><td>vm1</td><td>Running</td><td>4GB</td><td>5</td><td>3 days</td><td>2</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="mt-4">Network – Adapters & IPs</h3>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>Server</th><th>Interface</th><th>MAC</th><th>Status</th><th>Speed</th><th>IPv4</th><th>IPv6</th><th>Gateway</th><th>DNS</th><th>DHCP</th></tr></thead>
+    <tbody>
+      <tr><td>srv1</td><td class='truncate' title='Ethernet0'>Ethernet0</td><td></td><td></td><td></td><td class='truncate' title='192.168.1.10'>192.168.1.10</td><td class='truncate' title=''></td><td>192.168.1.1</td><td class='truncate' title='192.168.1.2,192.168.1.3'>192.168.1.2,192.168.1.3</td><td>False</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="mt-4">Storage – Volumes</h3>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>Server</th><th>Drive</th><th>Label</th><th>FS</th><th>Size (GB)</th><th>Free (GB)</th><th>Health</th><th>Path</th></tr></thead>
+    <tbody>
+      <tr><td>srv1</td><td>C:</td><td>OS</td><td>NTFS</td><td>100</td><td>60</td><td>Healthy</td><td class='truncate' title='C:\'>C:\</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="mt-4">Storage – Disks</h3>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>Server</th><th>Disk</th><th>Model</th><th>Serial</th><th>Bus</th><th>PartStyle</th><th>Health</th><th>Size (GB)</th></tr></thead>
+    <tbody>
+      <tr><td>srv1</td><td>0</td><td>Disk0</td><td>SN123</td><td>SATA</td><td>MBR</td><td>Healthy</td><td>500</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="mt-4">Local Users & Groups</h3>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>Server</th><th>Name</th><th>Type/Enabled</th><th>Last Logon / SID</th></tr></thead>
+    <tbody>
+      <tr><td>srv1</td><td>Administrator</td><td>True</td><td title='S-1-5-21-...'>10/06/2025 15:36:26</td></tr>
+      <tr><td>srv1</td><td>Administrators</td><td>Group</td><td title='S-1-5-32-544'></td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="mt-4">Certificates</h3>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>Server</th><th>Store</th><th>Subject</th><th>Thumbprint</th><th>Not After</th><th>Private Key</th></tr></thead>
+    <tbody>
+      <tr><td>srv1</td><td>My</td><td>CN=example.com</td><td>ABC123</td><td>01/05/2026 15:36:26</td><td>True</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="my-4"/>
+  <p class="text-muted">Generated by ServerAuditToolkitV2</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

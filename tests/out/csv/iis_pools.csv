@@ -1,0 +1,2 @@
+"Server","Name","State","Runtime","Pipeline","Identity"
+"srv1","DefaultAppPool","Started","v4.0","Integrated","ApplicationPoolIdentity"

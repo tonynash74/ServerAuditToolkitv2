@@ -245,7 +245,7 @@ $(($findings | ForEach-Object { "* $_" }) -join "`n")
   # Ensure JSON exists for convenience
   $jsonPath = Join-Path $OutDir "data_$Timestamp.json"
   if (-not (Test-Path $jsonPath)) {
-    $Data | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path $jsonPath
+  $Data | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -Path $jsonPath
   }
 
   # ---------- HTML (Bootstrap) ----------

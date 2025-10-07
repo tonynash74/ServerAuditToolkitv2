@@ -1,4 +1,11 @@
 # Smoke test for New-SATReport
+# Usage: RunReportSmoke.ps1 [-ArchiveMode <archive|delete>] [-Compress <$true|$false>]
+param(
+    [ValidateSet('archive','delete')]
+    [string]$ArchiveMode = 'archive',
+    [bool]$Compress = $true
+)
+
 # Dot-source the report helper
 . "$PSScriptRoot\..\src\Private\Report.ps1"
 
@@ -20,7 +27,36 @@ $sample = @{
 }
 
 $out = Join-Path $PSScriptRoot 'out'
-if (-not (Test-Path $out)) { New-Item -Path $out -ItemType Directory -Force | Out-Null }
+# Ensure out directory exists and is empty
+if (-not (Test-Path $out)) {
+    New-Item -Path $out -ItemType Directory -Force | Out-Null
+} else {
+    if ($ArchiveMode -eq 'delete') {
+        Get-ChildItem -Path $out -Force | Where-Object { $_.FullName -ne (Join-Path $out 'archive') } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    } else {
+        # Archive existing contents
+        $archiveRoot = Join-Path $out 'archive'
+        if (-not (Test-Path $archiveRoot)) { New-Item -Path $archiveRoot -ItemType Directory -Force | Out-Null }
+        $archiveTs = (Get-Date -Format 'yyyyMMdd_HHmmss')
+        $archiveDir = Join-Path $archiveRoot $archiveTs
+        New-Item -Path $archiveDir -ItemType Directory -Force | Out-Null
+        Get-ChildItem -Path $out -Force | Where-Object { $_.FullName -ne $archiveRoot -and $_.FullName -ne $archiveDir } | ForEach-Object {
+            $dest = Join-Path $archiveDir $_.Name
+            Move-Item -Path $_.FullName -Destination $dest -Force
+        }
+
+        if ($Compress) {
+            # Compress the archive directory to a zip and remove the folder
+            $zipPath = "${archiveDir}.zip"
+            try {
+                Compress-Archive -Path (Join-Path $archiveDir '*') -DestinationPath $zipPath -Force
+                Remove-Item -Path $archiveDir -Recurse -Force -ErrorAction SilentlyContinue
+            } catch {
+                Write-Log Warn "Failed to compress archive $archiveDir : $($_.Exception.Message)"
+            }
+        }
+    }
+}
 
 $ts = (Get-Date -Format 'yyyyMMdd_HHmmss')
 $report = New-SATReport -Data $sample -OutDir $out -Timestamp $ts

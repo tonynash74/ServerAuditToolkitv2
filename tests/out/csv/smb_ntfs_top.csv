@@ -1,0 +1,2 @@
+"Server","Share","Path","Identity","Rights","Type","Inherited"
+"srv1","Share1","C:\Shares\Share1","DOMAIN\\User","FullControl","Allow","False"

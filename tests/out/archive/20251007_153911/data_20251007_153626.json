@@ -1,0 +1,180 @@
+{
+  "Get-SATIIS": {
+    "srv1": {
+      "AppPools": [
+        {
+          "IdentityType": "ApplicationPoolIdentity",
+          "State": "Started",
+          "RuntimeVersion": "v4.0",
+          "PipelineMode": "Integrated",
+          "Name": "DefaultAppPool"
+        }
+      ],
+      "Sites": [
+        {
+          "State": "Started",
+          "Bindings": [
+            {
+              "bindingInformation": "*:80:",
+              "protocol": "http"
+            }
+          ],
+          "AppPool": "DefaultAppPool",
+          "PhysicalPath": "C:\\inetpub\\wwwroot",
+          "Name": "Default Web Site"
+        }
+      ]
+    }
+  },
+  "Get-SATNetwork": {
+    "srv1": {
+      "IPConfig": [
+        {
+          "IPv4Address": [
+            {
+              "IPAddress": "192.168.1.10"
+            }
+          ],
+          "DNSServer": [
+            {
+              "ServerAddresses": [
+                "192.168.1.2",
+                "192.168.1.3"
+              ]
+            }
+          ],
+          "IPv6Address": [],
+          "InterfaceAlias": "Ethernet0",
+          "Ipv4DefaultGateway": {
+            "NextHop": "192.168.1.1"
+          },
+          "Description": "Ethernet adapter",
+          "DHCP": false
+        }
+      ],
+      "Adapters": [
+        {
+          "LinkSpeed": "1 Gbps",
+          "InterfaceOperationalStatus": "Up",
+          "MacAddress": "00-11-22-33-44-55",
+          "Name": "Ethernet0"
+        }
+      ]
+    }
+  },
+  "Get-SATSystem": {
+    "srv1": {
+      "Name": "srv1"
+    }
+  },
+  "Get-SATStorage": {
+    "srv1": {
+      "Disks": [
+        {
+          "HealthStatus": "Healthy",
+          "Number": 0,
+          "BusType": "SATA",
+          "SerialNumber": "SN123",
+          "Size": 536870912000,
+          "FriendlyName": "Disk0",
+          "PartitionStyle": "MBR"
+        }
+      ],
+      "Volumes": [
+        {
+          "HealthStatus": "Healthy",
+          "FileSystemLabel": "OS",
+          "FileSystem": "NTFS",
+          "Size": 107374182400,
+          "SizeRemaining": 64424509440,
+          "Path": "C:\\",
+          "DriveLetter": "C:"
+        }
+      ]
+    }
+  },
+  "Get-SATSMB": {
+    "srv1": {
+      "Permissions": [
+        {
+          "NtfsTop": [
+            {
+              "IdentityReference": "DOMAIN\\\\User",
+              "AccessControlType": "Allow",
+              "IsInherited": false,
+              "FileSystemRights": "FullControl"
+            }
+          ],
+          "Share": "Share1",
+          "Path": "C:\\Shares\\Share1"
+        }
+      ],
+      "Shares": [
+        {
+          "Description": "Test Share",
+          "Path": "C:\\Shares\\Share1",
+          "EncryptData": false,
+          "Name": "Share1"
+        }
+      ]
+    }
+  },
+  "Get-SATHyperV": {
+    "srv1": {
+      "VMs": [
+        {
+          "Generation": "2",
+          "Name": "vm1",
+          "CPUUsage": "5",
+          "MemoryAssigned": "4GB",
+          "State": "Running",
+          "Uptime": "3 days"
+        }
+      ]
+    }
+  },
+  "Get-SATCertificates": {
+    "srv1": {
+      "Stores": {
+        "My": [
+          {
+            "Thumbprint": "ABC123",
+            "Subject": "CN=example.com",
+            "NotBefore": "2024-10-07T15:36:26.2554438+01:00",
+            "NotAfter": "2026-01-05T15:36:26.2596652+00:00",
+            "FriendlyName": "example",
+            "HasPrivateKey": true
+          }
+        ]
+      }
+    }
+  },
+  "Get-SATLocalAccounts": {
+    "srv1": {
+      "Members": [
+        {
+          "SID": "S-1-5-21-...",
+          "Group": "Administrators",
+          "ObjectClass": "User",
+          "Name": "Administrator"
+        }
+      ],
+      "Users": [
+        {
+          "PasswordRequired": true,
+          "Name": "Administrator",
+          "LastLogon": "2025-10-06T15:36:26.2614282+01:00",
+          "Enabled": true,
+          "SID": "S-1-5-21-...",
+          "PasswordExpires": false
+        }
+      ],
+      "Groups": [
+        {
+          "Name": "Administrators",
+          "SID": "S-1-5-32-544"
+        }
+      ]
+    }
+  }
+}
