@@ -13,10 +13,20 @@ function Invoke-ServerAudit {
 
   $results = @{}
   $collectors = @(
-    'Get-SATSystem','Get-SATRolesFeatures','Get-SATNetwork','Get-SATStorage',
-    'Get-SATADDS','Get-SATDNS','Get-SATDHCP','Get-SATIIS','Get-SATHyperV',
-    'Get-SATCertificates','Get-SATScheduledTasks','Get-SATLocalAccounts'
-  )
+  'Get-SATSystem',
+  'Get-SATRolesFeatures',
+  'Get-SATNetwork',
+  'Get-SATStorage',
+  'Get-SATADDS',
+  'Get-SATDNS',
+  'Get-SATDHCP',
+  'Get-SATIIS',
+  'Get-SATHyperV',
+  'Get-SATSMB',
+  'Get-SATCertificates',
+  'Get-SATScheduledTasks',
+  'Get-SATLocalAccounts'
+)
 
   Write-Log -Level Info "Planning run. Parallel=$($NoParallel.IsPresent -eq $false)"
   $cap = Get-SATCapability
