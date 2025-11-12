@@ -10,9 +10,12 @@
 # Dot-source collectors
 Get-ChildItem "$PSScriptRoot\Collectors\*.ps1" | ForEach-Object { . $_.FullName }
 
-function Invoke-ServerAudit {
-  [CmdletBinding()]
-  param([string[]]$ComputerName, [switch]$NoParallel)
+[CmdletBinding()]
+  param(
+    [string[]]$ComputerName = @($env:COMPUTERNAME),
+    [string]$OutDir,
+    [switch]$NoParallel
+  )
 
   $results = @{}
   $collectors = @(
@@ -63,13 +66,13 @@ function Invoke-ServerAudit {
   }
   return $results
 }
-# Ensure $OutDir exists (and has a default)
-if (-not $OutDir) {
-  $root = Split-Path -Parent $PSScriptRoot
-  if ($root -like '*\src') { $root = Split-Path -Parent $root }
-  $OutDir = Join-Path $root 'out'
-}
-New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+# Ensure $OutDir has a default
+  if (-not $OutDir) {
+    $root = Split-Path -Parent $PSScriptRoot
+    if ($root -like '*\src') { $root = Split-Path -Parent $root }
+    $OutDir = Join-Path $root 'out'
+  }
+  New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 # Save the main dataset
 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'

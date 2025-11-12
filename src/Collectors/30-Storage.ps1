@@ -46,7 +46,7 @@
                    Select-Object DiskIndex, Index, Type, Size, Bootable, BootPartition
 
           $vols  = Get-WmiObject -Class Win32_LogicalDisk -ErrorAction SilentlyContinue |
-                   Where-Object { $_.DriveType -in 2,3 } |
+                   Where-Object { @(2,3) -contains $_.DriveType } |
                    Select-Object DeviceID, FileSystem, VolumeName,
                                  @{n='Size';e={$_.Size}}, @{n='FreeSpace';e={$_.FreeSpace}}
 

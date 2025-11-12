@@ -296,18 +296,20 @@ function New-SATReport {
   if ($Findings){ $csvFinds = Write-SATCsv -OutDir $csvRoot -Name 'readiness_findings' -Rows ($Findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId) }
 
   # Confidence buckets
-  $hi=0; $md=0; $lo=0
-  if ($Units) {
-    foreach ($u in $Units) {
-      if ($u.Confidence -ge 0.9) { $hi++ }
-      elseif ($u.Confidence -ge 0.7) { $md++ }
-      else { $lo++ }
-    }
+$hi=0; $md=0; $lo=0
+if ($Units) {
+  foreach ($u in $Units) {
+    if ($u.Confidence -ge 0.9) { $hi++ }
+    elseif ($u.Confidence -ge 0.7) { $md++ }
+    else { $lo++ }
   }
-  $totalUnits = [math]::Max(1, (if($Units){$Units.Count}else{0}))
-  $hiPct = [math]::Round(($hi*100.0)/$totalUnits,1)
-  $mdPct = [math]::Round(($md*100.0)/$totalUnits,1)
-  $loPct = [math]::Round(($lo*100.0)/$totalUnits,1)
+}
+$unitCount = 0
+if ($Units) { $unitCount = $Units.Count }
+$totalUnits = [math]::Max(1, $unitCount)
+$hiPct = [math]::Round(($hi*100.0)/$totalUnits,1)
+$mdPct = [math]::Round(($md*100.0)/$totalUnits,1)
+$loPct = [math]::Round(($lo*100.0)/$totalUnits,1)
 
   # ---------- Markdown summary ----------
   $summary = @"

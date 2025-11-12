@@ -44,12 +44,17 @@ $dataset = Invoke-ServerAudit -ComputerName $ComputerName -OutDir $OutDir -NoPar
 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
 $base = Join-Path $OutDir "data_$ts"
 try {
-  $null = Export-SATData -Object $dataset -PathBase $base -Depth 6
-  Write-Verbose "[SAT] Data saved (JSON or CLIXML depending on PS version): $base.*"
+  if (Get-Command Export-SATData -ErrorAction SilentlyContinue) {
+    $null = Export-SATData -Object $dataset -PathBase $base -Depth 6
+  } elseif (Get-Command ConvertTo-Json -ErrorAction SilentlyContinue) {
+    $dataset | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path ($base + '.json')
+  } else {
+    $dataset | Export-Clixml -Path ($base + '.clixml')
+  }
+  Write-Verbose "[SAT] Data saved: $base.(json|clixml)"
 } catch {
   Write-Warning "[SAT] Could not persist data: $($_.Exception.Message)"
 }
-
 
 Write-Verbose "[SAT] Done. See outputs in $OutDir"
 return $dataset
