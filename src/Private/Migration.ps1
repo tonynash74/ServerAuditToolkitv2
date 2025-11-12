@@ -76,13 +76,26 @@ function New-SATMigrationUnits {
         Add-Unit -Id "iis:$srv:site:$($site.Name)" -Kind 'IisSite' -Server $srv -Name $site.Name `
           -Summary ("State={0} Path={1}" -f $site.State,$site.PhysicalPath) -DependsOn @("iispool:$srv:$($site.AppPool)") -Confidence $cap -Extra @{}
         foreach ($b in @($site.Bindings)) {
-          $thumb = $null
-          if ($b.PSObject.Properties['certificateHash']) { $thumb = $b.certificateHash }
-          if ($b.PSObject.Properties['thumbprint'])      { $thumb = $b.thumbprint }
-          $deps = @(); if ($thumb) { $deps = @("cert:$srv:$thumb") }
-          Add-Unit -Id ("iis:$srv:binding:{0}:{1}:{2}" -f $site.Name,$b.protocol,$b.bindingInformation) -Kind 'IisBinding' `
-            -Server $srv -Name ("{0} {1}" -f $b.protocol,$b.bindingInformation) -Summary ("Binding for {0}" -f $site.Name) `
-            -DependsOn $deps -Confidence $cap -Extra @{}
+  $thumb = $null
+  if ($b -and $b.PSObject -and $b.PSObject.Properties) {
+    try {
+      if ($b.PSObject.Properties['certificateHash']) { $thumb = $b.certificateHash }
+      elseif ($b.PSObject.Properties['thumbprint'])  { $thumb = $b.thumbprint }
+    } catch {}
+  }
+  $deps = @()
+  if ($thumb) { $deps = @("cert:$srv:$thumb") }
+
+  $prot = $null; $bind = $null
+  try { $prot = $b.protocol } catch {}
+  try { $bind = $b.bindingInformation } catch {}
+
+  Add-Unit -Id ("iis:$srv:binding:{0}:{1}:{2}" -f $site.Name,$prot,$bind) -Kind 'IisBinding' `
+    -Server $srv -Name ("{0} {1}" -f $prot,$bind) -Summary ("Binding for {0}" -f $site.Name) `
+    -DependsOn $deps -Confidence $cap -Extra @{}
+}
+}
+
         }
       }
       foreach ($p in @($Data['Get-SATIIS'][$srv].AppPools)) {
