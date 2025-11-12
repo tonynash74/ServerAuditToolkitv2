@@ -19,15 +19,15 @@
         $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
         $out[$c] = $res
       } else {
-        # netsh export fallback (requires admin & ADMIN$)
+        # netsh export fallback (requires admin)
         $scr = {
-          $tmp = Join-Path $env:SystemRoot "Temp\sat_dhcp_{0}.xml" -f ([guid]::NewGuid().ToString('N'))
+          $tmp = Join-Path $env:SystemRoot ("Temp\sat_dhcp_{0}.xml" -f ([guid]::NewGuid().ToString('N')))
           $ok = $true
-          try { & netsh dhcp server export "$tmp" all 2>$null } catch { $ok = $false }
+          try { & netsh.exe dhcp server export "$tmp" all 2>$null } catch { $ok = $false }
+
           $scopes = @(); $raw = $null
           if ($ok -and (Test-Path $tmp)) {
             $raw = Get-Content -Path $tmp -Raw
-            # Lightweight scope parse (best effort)
             $lines = $raw -split "`r?`n"
             foreach ($ln in $lines) {
               if ($ln -match 'ADD Scope ([0-9\.]+) ([0-9\.]+) \"?([^"]*)\"?') {
@@ -37,6 +37,7 @@
             }
             try { Remove-Item -Path $tmp -Force -ErrorAction SilentlyContinue } catch {}
           }
+
           $res=@{}; $res["Scopes"]=$scopes; $res["ExportRaw"]="$raw"; $res["Notes"]='netsh export'; return $res
         }
         $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
@@ -49,4 +50,3 @@
   }
   return $out
 }
-

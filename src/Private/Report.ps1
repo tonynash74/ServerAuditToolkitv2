@@ -148,8 +148,24 @@ function New-SATReport {
       }
 
       foreach ($cfg in @($n.IPConfig)) {
-        $alias = $null
-        if ($cfg -and $cfg.PSObject.Properties['InterfaceAlias']) { $alias = $cfg.InterfaceAlias }
+        $ = $null
+        if ($cfg -and $cfg.PSObject.Properties['Interface        $mac   = $null; if ($a -and $a.PSObject.Properties['MacAddress']) { $mac = $a.MacAddress }
+        $stat  = $null; if ($a -and $a.PSObject.Properties['InterfaceOperationalStatus']) { $stat = $a.InterfaceOperationalStatus }
+        $speed = $null; if ($a -and $a.PSObject.Properties['LinkSpeed']) { $speed = $a.LinkSpeed }
+
+        $netRows += New-Object PSObject -Property @{
+          Server     = $srv
+          Interface  = $alias
+          MAC        = $mac
+          Status     = $stat
+          Speed      = $speed
+          IPv4       = ($ipv4list -join ',')
+          IPv6       = ($ipv6list -join ',')
+          Gateway    = $gw
+          DNS        = ($dnslist -join ',')
+          DHCP       = (if ($cfg -and $cfg.PSObject.Properties['DHCP']) { $cfg.DHCP } else { $null })
+        }
+']) { $alias = $cfg.InterfaceAlias }
         if (-not $alias -and $cfg -and $cfg.PSObject.Properties['Description']) { $alias = $cfg.Description }
 
         $akey = $null; if ($alias) { $akey = $alias.ToLower() }
@@ -188,9 +204,10 @@ function New-SATReport {
           $dnslist += @($cfg.DNS)
         }
 
-        $mac   = $null; if ($a -and $a.PSObject.Properties['MacAddress']) { $mac = $a.MacAddress }
+                $mac   = $null; if ($a -and $a.PSObject.Properties['MacAddress']) { $mac = $a.MacAddress }
         $stat  = $null; if ($a -and $a.PSObject.Properties['InterfaceOperationalStatus']) { $stat = $a.InterfaceOperationalStatus }
         $speed = $null; if ($a -and $a.PSObject.Properties['LinkSpeed']) { $speed = $a.LinkSpeed }
+        $dhcpVal = $null; if ($cfg -and $cfg.PSObject.Properties['DHCP']) { $dhcpVal = $cfg.DHCP }
 
         $netRows += New-Object PSObject -Property @{
           Server     = $srv
@@ -202,8 +219,9 @@ function New-SATReport {
           IPv6       = ($ipv6list -join ',')
           Gateway    = $gw
           DNS        = ($dnslist -join ',')
-          DHCP       = (if ($cfg -and $cfg.PSObject.Properties['DHCP']) { $cfg.DHCP } else { $null })
+          DHCP       = $dhcpVal
         }
+
       }
     }
   }

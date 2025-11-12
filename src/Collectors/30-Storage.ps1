@@ -50,7 +50,9 @@
                    Select-Object DeviceID, FileSystem, VolumeName,
                                  @{n='Size';e={$_.Size}}, @{n='FreeSpace';e={$_.FreeSpace}}
 
-          $blRaw = (& manage-bde -status 2>$null)
+          $blExe = Join-Path $env:SystemRoot 'System32\manage-bde.exe'
+          $blRaw = ''
+          if (Test-Path $blExe) { $blRaw = (& $blExe -status 2>$null) }
 
           $res = @{}
           $res["Disks"]       = $disks
@@ -58,7 +60,7 @@
           $res["Volumes"]     = $vols
           $res["BitLockerRaw"]= "$blRaw"
           $res["Dedup"]       = @()
-          $res["Notes"]       = 'WMI + manage-bde'
+          $res["Notes"]       = 'WMI + manage-bde (if present)'
 
           return $res
         }

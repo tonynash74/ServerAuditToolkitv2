@@ -1,22 +1,25 @@
 ﻿function Get-SATDefaultReadinessRules {
-  # PS2-safe rules (no ConvertFrom-Json). Each rule is a hashtable.
   $rules = @()
 
+  # Certs expiring in < 90 days
   $rules += @{ id='cert-expiring-90d'; appliesTo='Certificate'; severity='High'
     ; message='Certificate expires within 90 days.'
-    ; when="(ToDate(`$Item.NotAfter) -lt (Now().AddDays(90)))" }
+    ; when='$Item.NotAfter -and ([datetime]$Item.NotAfter -lt (Get-Date).AddDays(90))' }
 
+  # HTTPS binding missing certificate dependency
   $rules += @{ id='iis-https-binding-no-cert'; appliesTo='IisBinding'; severity='High'
     ; message='HTTPS binding without a linked certificate.'
-    ; when="(`$Item.Name -like 'https*') -and -not (`$Item.DependsOn -match '^cert:')" }
+    ; when='($Item.Name -like "https*") -and (@($Item.DependsOn).Count -eq 0)' }
 
+  # Share root broad Full Control
   $rules += @{ id='smb-share-broad-fullcontrol'; appliesTo='SmbAclEntry'; severity='Medium'
     ; message='Share root ACL grants broad Full Control.'
-    ; when="(@('Everyone','Authenticated Users') -contains `$Item.Identity) -and (`$Item.Rights -like '*Full*')" }
+    ; when='(@("Everyone","Authenticated Users") -contains $Item.Identity) -and ($Item.Rights -like "*Full*")' }
 
+  # Scheduled task executable on UNC
   $rules += @{ id='task-runs-unc'; appliesTo='ScheduledTask'; severity='Medium'
     ; message='Task runs an executable from a UNC path.'
-    ; when="(`$Item.ActionExe -like '\\\\*')" }
+    ; when='$Item.ActionExe -like "\\\\*"' }
 
   return $rules
 }
@@ -103,7 +106,7 @@ function New-SATMigrationUnits {
     }
   }
 
-  # SMB (shares + top-level ACL entries)
+  # SMB
   if ($Data['Get-SATSMB']) {
     foreach ($srv in @($Data['Get-SATSMB'].Keys)) {
       $cap = Get-Conf $Data['Get-SATSMB'][$srv].Notes
@@ -165,16 +168,18 @@ function Evaluate-SATReadiness {
     [Parameter(Mandatory=$true)][array]$Units,
     [Parameter(Mandatory=$true)][array]$Rules
   )
-  function Now { Get-Date }
-  function ToDate([object]$x) { try { [datetime]$x } catch { Get-Date 1970-01-01 } }
 
   $findings = New-Object System.Collections.Generic.List[hashtable]
   foreach ($u in $Units) {
     foreach ($r in ($Rules | Where-Object { $_.appliesTo -eq $u.Kind })) {
       $Item = $u
-      $sb = [ScriptBlock]::Create($r.when)
       $ok = $false
-      try { $ok = [bool](& $sb) } catch { $ok = $false }
+      try {
+        $sb = [ScriptBlock]::Create($r.when)
+        $ok = [bool](& $sb)
+      } catch {
+        $ok = $false
+      }
       if ($ok) {
         $null = $findings.Add(@{
           UnitId   = $u.Id; Kind=$u.Kind; Server=$u.Server; Name=$u.Name

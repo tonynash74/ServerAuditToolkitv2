@@ -7,37 +7,64 @@
     try {
       Write-Log Info ("System inventory on {0}" -f $c)
       $scr = {
-        $os  = Get-WmiObject -Class Win32_OperatingSystem -ErrorAction SilentlyContinue
-        $cs  = Get-WmiObject -Class Win32_ComputerSystem -ErrorAction SilentlyContinue
-        $bios= Get-WmiObject -Class Win32_BIOS -ErrorAction SilentlyContinue
-        $cpu = Get-WmiObject -Class Win32_Processor -ErrorAction SilentlyContinue
+        $os   = Get-WmiObject -Class Win32_OperatingSystem -ErrorAction SilentlyContinue
+        $cs   = Get-WmiObject -Class Win32_ComputerSystem   -ErrorAction SilentlyContinue
+        $bios = Get-WmiObject -Class Win32_BIOS             -ErrorAction SilentlyContinue
+        $cpu  = Get-WmiObject -Class Win32_Processor        -ErrorAction SilentlyContinue
 
-        $boot = $null; if ($os) { $boot = [Management.ManagementDateTimeConverter]::ToDateTime($os.LastBootUpTime) }
-        $up   = $null; if ($boot) { $up = (Get-Date) - $boot }
+        $install = $null
+        if ($os -and $os.InstallDate) { $install = [Management.ManagementDateTimeConverter]::ToDateTime($os.InstallDate) }
+
+        $boot = $null
+        if ($os -and $os.LastBootUpTime) { $boot = [Management.ManagementDateTimeConverter]::ToDateTime($os.LastBootUpTime) }
+
+        $up = $null
+        if ($boot) { $up = (Get-Date) - $boot }
+
+        $totMemMB = $null
+        if ($cs -and $cs.TotalPhysicalMemory) { $totMemMB = [math]::Round($cs.TotalPhysicalMemory/1MB) }
+
+        $sockets = 0; $coresTot = $null
+        if ($cpu) {
+          $sockets = ($cpu | Measure-Object).Count
+          $sumCores = ($cpu | Measure-Object -Property NumberOfCores -Sum).Sum
+          if ($sumCores) { $coresTot = $sumCores }
+        }
+
+        $osName       = $null; if ($os) { $osName = $os.Caption }
+        $osEdition    = $null; if ($os) { $osEdition = $os.OperatingSystemSKU }
+        $osVersion    = $null; if ($os) { $osVersion = $os.Version }
+        $buildNumber  = $null; if ($os) { $buildNumber = $os.BuildNumber }
+        $domain       = $null; if ($cs) { $domain = $cs.Domain }
+        $partOfDomain = $null; if ($cs) { $partOfDomain = $cs.PartOfDomain }
+        $mfr          = $null; if ($cs) { $mfr = $cs.Manufacturer }
+        $model        = $null; if ($cs) { $model = $cs.Model }
+        $logProcs     = $null; if ($cs) { $logProcs = $cs.NumberOfLogicalProcessors }
+        $biosSerial   = $null; if ($bios){ $biosSerial = $bios.SerialNumber }
+        $isVirtual    = $false; if ($cs -and $cs.Model) { $isVirtual = ($cs.Model -match 'Virtual|VMware|Hyper-V|KVM|Xen') }
 
         New-Object PSObject -Property @{
           ComputerName   = $env:COMPUTERNAME
-          OSName         = $os.Caption
-          OSEdition      = $os.OperatingSystemSKU
-          OSVersion      = $os.Version
-          BuildNumber    = $os.BuildNumber
-          InstallDate    = (if ($os) { [Management.ManagementDateTimeConverter]::ToDateTime($os.InstallDate) } else { $null })
+          OSName         = $osName
+          OSEdition      = $osEdition
+          OSVersion      = $osVersion
+          BuildNumber    = $buildNumber
+          InstallDate    = $install
           LastBoot       = $boot
           Uptime         = $up
-          Domain         = $cs.Domain
-          PartOfDomain   = $cs.PartOfDomain
-          Manufacturer   = $cs.Manufacturer
-          Model          = $cs.Model
-          TotalMemoryMB  = (if ($cs) { [math]::Round($cs.TotalPhysicalMemory/1MB) } else { $null })
-          LogicalProcs   = $cs.NumberOfLogicalProcessors
-          Sockets        = ($cpu | Measure-Object).Count
-          CoresTotal     = ($cpu | Measure-Object -Property NumberOfCores -Sum).Sum
-          BIOSSerial     = $bios.SerialNumber
-          IsVirtual      = (if ($cs) { ($cs.Model -match 'Virtual|VMware|Hyper-V|KVM|Xen') } else { $false })
+          Domain         = $domain
+          PartOfDomain   = $partOfDomain
+          Manufacturer   = $mfr
+          Model          = $model
+          TotalMemoryMB  = $totMemMB
+          LogicalProcs   = $logProcs
+          Sockets        = $sockets
+          CoresTotal     = $coresTot
+          BIOSSerial     = $biosSerial
+          IsVirtual      = $isVirtual
         }
       }
-      $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
-      $out[$c] = $res
+      $out[$c] = Invoke-Command -ComputerName $c -ScriptBlock $scr
     } catch {
       Write-Log Error ("System collector failed on {0} : {1}" -f $c, $_.Exception.Message)
       $out[$c] = @{ Error = $_.Exception.Message }
@@ -45,4 +72,3 @@
   }
   return $out
 }
-
