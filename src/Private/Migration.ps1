@@ -125,3 +125,153 @@ function New-SATMigrationUnits {
       # AppPools
       foreach ($p in @($Data['Get-SATIIS'][$srv].AppPools)) {
         $pn=$null;$pst=$null;$rt=$null;$pm=$null
+        try { $pn = $p.Name } catch {}
+        try { $pst= $p.State } catch {}
+        try { $rt = $p.RuntimeVersion } catch {}
+        try { $pm = $p.PipelineMode } catch {}
+        Add-Unit -Id ("iispool:{0}:{1}" -f $srv,$pn) -Kind 'IisAppPool' -Server $srv -Name $pn `
+          -Summary ("State={0} CLR={1} Mode={2}" -f $pst,$rt,$pm) -DependsOn @() -Confidence $cap -Extra @{}
+      }
+    }
+  }
+
+  # ------------- Certificates -------------
+  if ($Data['Get-SATCertificates']) {
+    foreach ($srv in @($Data['Get-SATCertificates'].Keys)) {
+      $cap = Get-Conf $Data['Get-SATCertificates'][$srv].Notes
+      $stores = $Data['Get-SATCertificates'][$srv].Stores
+      foreach ($store in @($stores.Keys)) {
+        foreach ($c in @($stores[$store])) {
+          $thumb=$null;$name=$null;$na=$null
+          try { $thumb = $c.Thumbprint } catch {}
+          try { $name  = $c.FriendlyName } catch {}
+          if (-not $name) { try { $name = $c.Subject } catch {} }
+          try { $na    = $c.NotAfter } catch {}
+          Add-Unit -Id ("cert:{0}:{1}" -f $srv,$thumb) -Kind 'Certificate' -Server $srv -Name $name `
+            -Summary ("{0} NotAfter={1}" -f $store,$na) -DependsOn @() -Confidence $cap -Extra @{ NotAfter=$na }
+        }
+      }
+    }
+  }
+
+  # ------------- SMB -------------
+  if ($Data['Get-SATSMB']) {
+    foreach ($srv in @($Data['Get-SATSMB'].Keys)) {
+      $cap = Get-Conf $Data['Get-SATSMB'][$srv].Notes
+      foreach ($sh in @($Data['Get-SATSMB'][$srv].Shares)) {
+        $nm=$null;$pth=$null;$enc=$null
+        try { $nm = $sh.Name } catch {}
+        try { $pth= $sh.Path } catch {}
+        try { $enc= $sh.EncryptData } catch {}
+        Add-Unit -Id ("smb:{0}:share:{1}" -f $srv,$nm) -Kind 'SmbShare' -Server $srv -Name $nm `
+          -Summary ("{0} Encrypt={1}" -f $pth,$enc) -DependsOn @() -Confidence $cap -Extra @{}
+      }
+      foreach ($perm in @($Data['Get-SATSMB'][$srv].Permissions)) {
+        $shareName=$null; $pathTop=$null
+        try { $shareName = $perm.Share } catch {}
+        try { $pathTop   = $perm.Path } catch {}
+        $topList = @()
+        if ($perm -and $perm.PSObject -and $perm.PSObject.Properties['NtfsTop']) { $topList = @($perm.NtfsTop) }
+        foreach ($nt in $topList) {
+          $id=$null;$rights=$null;$type=$null
+          try { $id = $nt.IdentityReference } catch {}
+          try { $rights = $nt.FileSystemRights } catch {}
+          try { $type = $nt.AccessControlType } catch {}
+          $key = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(("{0}|{1}|{2}" -f $id,$rights,$type)))
+          Add-Unit -Id ("smb:{0}:share:{1}:acl:{2}" -f $srv,$shareName,$key) -Kind 'SmbAclEntry' -Server $srv -Name $shareName `
+            -Summary ("{0} {1} {2}" -f $id,$type,$rights) -DependsOn @("smb:{0}:share:{1}" -f $srv,$shareName) `
+            -Confidence $cap -Extra @{ Identity=$id; Rights=$rights }
+        }
+      }
+    }
+  }
+
+  # ------------- Hyper-V -------------
+  if ($Data['Get-SATHyperV']) {
+    foreach ($srv in @($Data['Get-SATHyperV'].Keys)) {
+      $cap = Get-Conf $Data['Get-SATHyperV'][$srv].Notes
+      foreach ($vm in @($Data['Get-SATHyperV'][$srv].VMs)) {
+        $name=$null;$state=$null;$mem=$null;$up=$null
+        try { $name = $vm.Name } catch {}
+        try { $state= $vm.State } catch {}
+        try { $mem  = $vm.MemoryAssigned } catch {}
+        try { $up   = $vm.Uptime } catch {}
+        Add-Unit -Id ("hv:{0}:vm:{1}" -f $srv,$name) -Kind 'HvVm' -Server $srv -Name $name `
+          -Summary ("State={0} Mem={1} Uptime={2}" -f $state,$mem,$up) -DependsOn @() -Confidence $cap -Extra @{}
+      }
+    }
+  }
+
+  # ------------- Printers -------------
+  if ($Data['Get-SATPrinters']) {
+    foreach ($srv in @($Data['Get-SATPrinters'].Keys)) {
+      $cap = Get-Conf $Data['Get-SATPrinters'][$srv].Notes
+      foreach ($p in @($Data['Get-SATPrinters'][$srv].Printers)) {
+        $pn=$null;$drv=$null;$port=$null;$shr=$null
+        try { $pn = $p.Name } catch {}
+        try { $drv= $p.DriverName } catch {}
+        try { $port=$p.PortName } catch {}
+        try { $shr = $p.Shared } catch {}
+        Add-Unit -Id ("print:{0}:queue:{1}" -f $srv,$pn) -Kind 'PrinterQueue' -Server $srv -Name $pn `
+          -Summary ("Shared={0} Driver={1} Port={2}" -f $shr,$drv,$port) -DependsOn @() -Confidence $cap -Extra @{}
+      }
+    }
+  }
+
+  # ------------- Scheduled Tasks -------------
+  if ($Data['Get-SATScheduledTasks']) {
+    foreach ($srv in @($Data['Get-SATScheduledTasks'].Keys)) {
+      $cap = Get-Conf $Data['Get-SATScheduledTasks'][$srv].Notes
+      foreach ($t in @($Data['Get-SATScheduledTasks'][$srv].Tasks)) {
+        $tp=$null;$tn=$null;$state=$null;$next=$null;$exe=$null
+        try { $tp = $t.TaskPath } catch {}
+        try { $tn = $t.TaskName } catch {}
+        try { $state = $t.State } catch {}
+        try { $next  = $t.NextRun } catch {}
+        try { $exe   = $t.ActionExe } catch {}
+        $idKey = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(("{0}{1}" -f $tp,$tn)))
+        Add-Unit -Id ("task:{0}:{1}" -f $srv,$idKey) -Kind 'ScheduledTask' -Server $srv -Name $tn `
+          -Summary ("State={0} Next={1} Exec={2}" -f $state,$next,$exe) -DependsOn @() -Confidence $cap -Extra @{ ActionExe=$exe }
+      }
+    }
+  }
+
+  return ,@($units)  # force array
+}
+
+function Evaluate-SATReadiness {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory=$true)][array]$Units,
+    [Parameter(Mandatory=$true)][array]$Rules
+  )
+
+  $findings = New-Object System.Collections.ArrayList
+
+  foreach ($u in $Units) {
+    $appRules = @($Rules | Where-Object { $_.appliesTo -eq $u.Kind })
+    foreach ($r in $appRules) {
+      $Item = $u
+      $ok = $false
+      try {
+        $sb = [ScriptBlock]::Create($r.when)
+        $ok = [bool](& $sb)
+      } catch {
+        $ok = $false
+      }
+      if ($ok) {
+        [void]$findings.Add(@{
+          UnitId   = $u.Id
+          Kind     = $u.Kind
+          Server   = $u.Server
+          Name     = $u.Name
+          Severity = $r.severity
+          RuleId   = $r.id
+          Message  = $r.message
+        })
+      }
+    }
+  }
+
+  return ,@($findings)
+}
