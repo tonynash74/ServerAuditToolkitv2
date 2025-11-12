@@ -84,11 +84,14 @@ function Get-SATPrinters {
               $sn = $null
               if ($_.PSObject -and $_.PSObject.Properties['SNMPEnabled']) { $sn = $_.SNMPEnabled }
               elseif ($_.PSObject -and $_.PSObject.Properties['SnmpEnabled']) { $sn = $_.SnmpEnabled }
+              $host = $null; $portn = $null
+              try { $host = $_.HostAddress } catch {}
+              try { $portn = $_.PortNumber } catch {}
               New-Object PSObject -Property @{
                 Name = $_.Name
-                PrinterHostAddress = $_.HostAddress
-                HostAddress = $_.HostAddress
-                PortNumber = $_.PortNumber
+                PrinterHostAddress = $host
+                HostAddress = $host
+                PortNumber = $portn
                 SnmpEnabled = $sn
               }
             }
@@ -97,7 +100,10 @@ function Get-SATPrinters {
 
         $res.Printers = ($printers  | Where-Object { $_ }) # squash nulls
         $res.Ports    = ($ports     | Where-Object { $_ })
-        $res.Notes    = (if ($used) { $used } else { 'none' })
+        # PS2-safe: no inline if() as expression
+        $note = 'none'
+        if ($used) { $note = $used }
+        $res.Notes = $note
         return $res
       }
 

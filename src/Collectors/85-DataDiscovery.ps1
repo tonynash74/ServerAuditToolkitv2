@@ -66,7 +66,7 @@ function Get-SATDataDiscovery {
           return 'General'
         }
 
-        # Scan config (keep PS2/.NET 3.5 safe)
+        # Scan config (PS2/.NET 3.5 safe)
         $maxFilesPerShare = 200000
         $topFoldersMax    = 50
         $topExtMax        = 50
@@ -165,6 +165,12 @@ function Get-SATDataDiscovery {
 
           $cat = Get-Category $sh.Name $path $binPct $officePct
 
+          # PS2-safe: avoid inline if() expression
+          $oldestOut = $null
+          if ($oldest -ne [datetime]::MaxValue) { $oldestOut = $oldest }
+          $newestOut = $null
+          if ($newest -ne [datetime]::MinValue) { $newestOut = $newest }
+
           $result.Shares += New-Object PSObject -Property @{
             Server     = $env:COMPUTERNAME
             Share      = $sh.Name
@@ -176,8 +182,8 @@ function Get-SATDataDiscovery {
             WarmPct    = $warmPct
             ColdPct    = $coldPct
             FrozenPct  = $frozenPct
-            Oldest     = (if ($oldest -eq [datetime]::MaxValue) { $null } else { $oldest })
-            Newest     = (if ($newest -eq [datetime]::MinValue) { $null } else { $newest })
+            Oldest     = $oldestOut
+            Newest     = $newestOut
             BinaryPct  = $binPct
             OfficePct  = $officePct
             Sampled    = $sampled
@@ -188,13 +194,14 @@ function Get-SATDataDiscovery {
           $subs = @()
           foreach ($k in $subAgg.Keys) {
             $val = $subAgg[$k]
+            $den2 = [math]::Max(1,[double]$val.Count)
             $subs += New-Object PSObject -Property @{
               Server=$env:COMPUTERNAME; Share=$sh.Name; Folder=$k
               Files=[int64]$val.Count; Bytes=[int64]$val.Bytes
-              HotPct=[math]::Round(($val.Hot*100.0)/[math]::Max(1,[double]$val.Count),1)
-              WarmPct=[math]::Round(($val.Warm*100.0)/[math]::Max(1,[double]$val.Count),1)
-              ColdPct=[math]::Round(($val.Cold*100.0)/[math]::Max(1,[double]$val.Count),1)
-              FrozenPct=[math]::Round(($val.Frozen*100.0)/[math]::Max(1,[double]$val.Count),1)
+              HotPct=[math]::Round(($val.Hot*100.0)/$den2,1)
+              WarmPct=[math]::Round(($val.Warm*100.0)/$den2,1)
+              ColdPct=[math]::Round(($val.Cold*100.0)/$den2,1)
+              FrozenPct=[math]::Round(($val.Frozen*100.0)/$den2,1)
             }
           }
           $result.Folders += @($subs | Sort-Object Bytes -Descending | Select-Object -First $topFoldersMax)
@@ -211,6 +218,7 @@ function Get-SATDataDiscovery {
           $result.FileTypes += @($types | Sort-Object Bytes -Descending | Select-Object -First $topExtMax)
         } # foreach share
 
+        if (-not $result.Notes) { $result.Notes = 'DataDiscovery' }
         return $result
       } # scriptblock
 
