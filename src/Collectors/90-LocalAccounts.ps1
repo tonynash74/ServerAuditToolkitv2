@@ -1,4 +1,4 @@
-function Get-SATLocalAccounts {
+﻿function Get-SATLocalAccounts {
   [CmdletBinding()]
   param(
     [string[]]$ComputerName,
@@ -86,3 +86,4 @@ function Get-SATLocalAccounts {
   }
   return $out
 }
+

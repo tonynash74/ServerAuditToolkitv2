@@ -1,4 +1,4 @@
-function Get-SATRolesFeatures {
+﻿function Get-SATRolesFeatures {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -33,3 +33,4 @@ function Get-SATRolesFeatures {
   }
   return $out
 }
+

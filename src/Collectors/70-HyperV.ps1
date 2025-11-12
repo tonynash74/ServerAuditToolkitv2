@@ -1,4 +1,4 @@
-function Get-SATHyperV {
+﻿function Get-SATHyperV {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -76,3 +76,4 @@ function Get-SATHyperV {
   }
   return $out
 }
+

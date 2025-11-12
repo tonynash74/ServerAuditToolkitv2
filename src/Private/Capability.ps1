@@ -1,4 +1,4 @@
-function Get-SATCapability {
+﻿function Get-SATCapability {
   $cap = @{
     PSVersion         = (Get-SATPSMajor)
     HasServerMgr      = (Test-SATModule 'ServerManager')
@@ -18,3 +18,4 @@ function Get-SATCapability {
   }
   return $cap
 }
+

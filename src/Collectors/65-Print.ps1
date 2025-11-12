@@ -1,4 +1,4 @@
-function Get-SATPrinters {
+﻿function Get-SATPrinters {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -35,3 +35,4 @@ function Get-SATPrinters {
   }
   return $out
 }
+

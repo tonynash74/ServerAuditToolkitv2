@@ -1,4 +1,4 @@
-function Get-SATIIS {
+﻿function Get-SATIIS {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -135,3 +135,4 @@ function Get-SATIIS {
   }
   return $out
 }
+

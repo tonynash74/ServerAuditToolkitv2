@@ -1,4 +1,4 @@
-function Get-SATDHCP {
+﻿function Get-SATDHCP {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -49,3 +49,4 @@ function Get-SATDHCP {
   }
   return $out
 }
+

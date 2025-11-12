@@ -1,4 +1,4 @@
-function Write-Log {
+﻿function Write-Log {
   param(
     [ValidateSet('Debug','Info','Warn','Error')] [string]$Level = 'Info',
     [string]$Message
@@ -12,3 +12,4 @@ function Write-Log {
     'Error' { Write-Error $line }
   }
 }
+

@@ -1,4 +1,4 @@
-function Get-SATScheduledTasks {
+﻿function Get-SATScheduledTasks {
   [CmdletBinding()]
   param(
     [string[]]$ComputerName,
@@ -118,3 +118,4 @@ function Get-SATScheduledTasks {
   }
   return $out
 }
+

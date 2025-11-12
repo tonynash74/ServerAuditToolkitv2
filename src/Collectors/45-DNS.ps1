@@ -1,4 +1,4 @@
-function Get-SATDNS {
+﻿function Get-SATDNS {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -45,3 +45,4 @@ function Get-SATDNS {
   }
   return $out
 }
+

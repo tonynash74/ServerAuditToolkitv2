@@ -1,4 +1,4 @@
-function Get-SATSMB {
+﻿function Get-SATSMB {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability,[int]$MaxAclEntries = 25)
 
@@ -74,3 +74,4 @@ function Get-SATSMB {
   }
   return $out
 }
+

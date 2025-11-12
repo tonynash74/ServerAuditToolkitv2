@@ -1,4 +1,4 @@
-function Get-SATSystem {
+﻿function Get-SATSystem {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -45,3 +45,4 @@ function Get-SATSystem {
   }
   return $out
 }
+

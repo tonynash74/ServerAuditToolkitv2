@@ -1,4 +1,4 @@
-function Get-SATADDS {
+﻿function Get-SATADDS {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -78,3 +78,4 @@ function Get-SATADDS {
     return @{ ActiveDirectory = @{ Error = $_.Exception.Message } }
   }
 }
+

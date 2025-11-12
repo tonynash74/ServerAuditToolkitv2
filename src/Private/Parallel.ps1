@@ -1,6 +1,6 @@
-function Invoke-RunspaceTasks {
+﻿function Invoke-RunspaceTasks {
   [CmdletBinding()]
-  param([Parameter(Mandatory)] [array]$Tasks, [int]$Throttle = [Environment]::ProcessorCount)
+  param([Parameter(Mandatory=$true)] [array]$Tasks, [int]$Throttle = [Environment]::ProcessorCount)
 
   Add-Type -AssemblyName System.Management.Automation
   $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()

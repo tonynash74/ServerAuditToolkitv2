@@ -1,4 +1,4 @@
-function Get-SATCertificates {
+﻿function Get-SATCertificates {
   [CmdletBinding()]
   param([string[]]$ComputerName,[hashtable]$Capability)
 
@@ -34,3 +34,4 @@ function Get-SATCertificates {
   }
   return $out
 }
+

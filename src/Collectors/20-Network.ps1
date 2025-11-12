@@ -1,4 +1,4 @@
-function Get-SATNetwork {
+﻿function Get-SATNetwork {
   [CmdletBinding()]
   param(
     [string[]]$ComputerName,
@@ -65,7 +65,7 @@ function Get-SATNetwork {
         $out[$c] = $res
 
       } else {
-        # PS2+/no NetTCPIP → WMI + classic tools
+        # PS2+/no NetTCPIP â†’ WMI + classic tools
         $scr = {
           param($incListen)
           $cfg = Get-WmiObject -Class Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue |
@@ -111,3 +111,4 @@ function Get-SATNetwork {
   }
   return $out
 }
+

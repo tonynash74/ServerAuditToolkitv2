@@ -1,4 +1,4 @@
-function Get-SATDefaultReadinessRules {
+﻿function Get-SATDefaultReadinessRules {
   # JSON rules (PS 4.0 friendly). You can override with -RulesPath later.
   $json = @'
 [
@@ -37,7 +37,7 @@ function Get-SATDefaultReadinessRules {
 
 function New-SATMigrationUnits {
   [CmdletBinding()]
-  param([Parameter(Mandatory)][hashtable]$Data)
+  param([Parameter(Mandatory=$true)][hashtable]$Data)
 
   $units = New-Object System.Collections.Generic.List[hashtable]
 
@@ -176,8 +176,8 @@ function New-SATMigrationUnits {
 function Evaluate-SATReadiness {
   [CmdletBinding()]
   param(
-    [Parameter(Mandatory)][array]$Units,
-    [Parameter(Mandatory)][array]$Rules
+    [Parameter(Mandatory=$true)][array]$Units,
+    [Parameter(Mandatory=$true)][array]$Rules
   )
 
   function Now { Get-Date }
@@ -205,3 +205,4 @@ function Evaluate-SATReadiness {
   }
   return ,$findings.ToArray()
 }
+

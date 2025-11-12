@@ -1,4 +1,4 @@
-function Get-SATStorage {
+﻿function Get-SATStorage {
   [CmdletBinding()]
   param(
     [string[]]$ComputerName,
@@ -74,3 +74,5 @@ function Get-SATStorage {
   }
   return $out
 }
+
+

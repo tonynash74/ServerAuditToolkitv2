@@ -1,5 +1,5 @@
-function Write-SATCsv {
-  param([Parameter(Mandatory)][string]$OutDir,[Parameter(Mandatory)][string]$Name,[Parameter(Mandatory)][array]$Rows)
+﻿function Write-SATCsv {
+  param([Parameter(Mandatory=$true)][string]$OutDir,[Parameter(Mandatory=$true)][string]$Name,[Parameter(Mandatory=$true)][array]$Rows)
   try {
     if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
     $path = Join-Path $OutDir "$Name.csv"
@@ -98,7 +98,7 @@ $(($findingsMsgs | ForEach-Object { "* $_" }) -join "`n")
 </head>
 <body class="bg-light">
 <div class="container my-4">
-  <h1 class="mb-3">ServerAuditToolkitV2 – Migration Readiness</h1>
+  <h1 class="mb-3">ServerAuditToolkitV2 â€“ Migration Readiness</h1>
   <p class="text-muted">Run: $Timestamp</p>
 
   <div class="alert alert-info">
@@ -176,3 +176,4 @@ $(($findingsMsgs | ForEach-Object { "* $_" }) -join "`n")
 
   return @{ Markdown=$md; Html=$htmlPath; CsvRoot=$csvRoot }
 }
+
