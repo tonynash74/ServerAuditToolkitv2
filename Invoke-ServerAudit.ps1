@@ -38,7 +38,7 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 Write-Verbose "[SAT] Starting audit for: $($ComputerName -join ', ')"
 
 # Run the orchestrator in the module
-$dataset = Invoke-ServerAudit -ComputerName $ComputerName -NoParallel:$NoParallel -Verbose
+$dataset = Invoke-ServerAudit -ComputerName $ComputerName -OutDir $OutDir -NoParallel:$NoParallel -Verbose
 
 # Persist JSON if the module didn’t already
 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'

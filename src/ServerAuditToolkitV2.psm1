@@ -63,27 +63,33 @@ function Invoke-ServerAudit {
   }
   return $results
 }
-# Persist dataset using compat exporter (JSON if possible, else CLIXML)
-$global:SAT_LastTimestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$base = Join-Path $OutDir ("data_{0}" -f $global:SAT_LastTimestamp)
+# Ensure $OutDir exists (and has a default)
+if (-not $OutDir) {
+  $root = Split-Path -Parent $PSScriptRoot
+  if ($root -like '*\src') { $root = Split-Path -Parent $root }
+  $OutDir = Join-Path $root 'out'
+}
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
+# Save the main dataset
+$ts = Get-Date -Format 'yyyyMMdd_HHmmss'
+$base = Join-Path $OutDir ("data_{0}" -f $ts)
 $null = Export-SATData -Object $results -PathBase $base -Depth 6
 
-# Build Migration Units
-$units = New-SATMigrationUnits -Data $results
-
-# Load rules (use default for now; later add -RulesPath param to Invoke-ServerAudit)
-$rules = Get-SATDefaultReadinessRules
+# Build Migration Units + Findings
+$units    = New-SATMigrationUnits -Data $results
+$rules    = Get-SATDefaultReadinessRules
 $findings = Evaluate-SATReadiness -Units $units -Rules $rules
 
-# Persist MU + findings (JSON + CSV)
-$muJson = Join-Path $OutDir "migration_units_$ts.json"
-$units | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path $muJson
+# Persist MUs (JSON if available, else CLIXML)
+$muBase = Join-Path $OutDir ("migration_units_{0}" -f $ts)
+$null = Export-SATData -Object $units -PathBase $muBase -Depth 6
 
-$csvDir = Join-Path $OutDir 'csv'; New-Item -ItemType Directory -Force -Path $csvDir | Out-Null
-$units | Select Id,Kind,Server,Name,Summary,Confidence | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'migration_units.csv')
+# Ensure CSV dir, then CSVs
+$csvDir = Join-Path $OutDir 'csv'
+New-Item -ItemType Directory -Force -Path $csvDir | Out-Null
+$units    | Select Id,Kind,Server,Name,Summary,Confidence | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'migration_units.csv')
 $findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'readiness_findings.csv')
 
-# Render report (pass Units & Findings along)
-$report = New-SATReport -Data $results -Units $units -Findings $findings -OutDir $OutDir -Timestamp $ts -Verbose:$VerbosePreference
-
-Export-ModuleMember -Function Invoke-ServerAudit,Get-SAT*
+# Render the report
+$null = New-SATReport -Data $results -Units $units -Findings $findings -OutDir $OutDir -Timestamp $ts -Verbose:$VerbosePreference
