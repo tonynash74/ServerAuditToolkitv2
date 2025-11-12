@@ -1,72 +1,30 @@
-# Load private helpers
-. $PSScriptRoot\Private\Compat.ps1
-. $PSScriptRoot\Private\Logging.ps1
-. $PSScriptRoot\Private\Parallel.ps1
-. $PSScriptRoot\Private\Capability.ps1
-. $PSScriptRoot\Private\Report.ps1
-. $PSScriptRoot\Private\Migration.ps1
+# ServerAuditToolkitV2.psm1  (PowerShell 2.0+ safe)
 
+# ---- Dot-source private helpers (order matters) ----
+. "$PSScriptRoot\Private\Compat.ps1"
+. "$PSScriptRoot\Private\Logging.ps1"
+. "$PSScriptRoot\Private\Capability.ps1"
+. "$PSScriptRoot\Private\Parallel.ps1"
+. "$PSScriptRoot\Private\Migration.ps1"
+. "$PSScriptRoot\Private\Report.ps1"
 
-# Dot-source collectors
-Get-ChildItem "$PSScriptRoot\Collectors\*.ps1" | ForEach-Object { . $_.FullName }
+# ---- Load all collectors ----
+$collectorsPath = Join-Path $PSScriptRoot 'Collectors'
+if (Test-Path $collectorsPath) {
+  Get-ChildItem -Path $collectorsPath -Filter *.ps1 | ForEach-Object { . $_.FullName }
+} else {
+  Write-Log Warn ("Collectors path not found: {0}" -f $collectorsPath)
+}
 
-[CmdletBinding()]
+function Invoke-ServerAudit {
+  [CmdletBinding()]
   param(
     [string[]]$ComputerName = @($env:COMPUTERNAME),
     [string]$OutDir,
     [switch]$NoParallel
   )
 
-  $results = @{}
-  $collectors = @(
-  'Get-SATSystem',
-  'Get-SATRolesFeatures',
-  'Get-SATNetwork',
-  'Get-SATStorage',
-  'Get-SATADDS',
-  'Get-SATDNS',
-  'Get-SATDHCP',
-  'Get-SATIIS',
-  'Get-SATHyperV',
-  'Get-SATSMB',
-  'Get-SATCertificates',
-  'Get-SATScheduledTasks',
-  'Get-SATLocalAccounts'
-)
-
-  Write-Log -Level Info "Planning run. Parallel=$($NoParallel.IsPresent -eq $false)"
-  $cap = Get-SATCapability
-
-  $jobs = @()
-  foreach ($name in $collectors) {
-    $jobs += @{
-      Name = $name
-      ScriptBlock = {
-        param($fn,$targets,$cap)
-        & $fn -ComputerName $targets -Capability $cap -Verbose:$VerbosePreference
-      }
-      Args = @($name,$ComputerName,$cap)
-    }
-  }
-
-  $collectorOutput = if ($NoParallel) {
-    Invoke-Serial -Tasks $jobs
-  } else {
-    Invoke-RunspaceTasks -Tasks $jobs -Throttle ([Math]::Max(2,[Environment]::ProcessorCount))
-  }
-
-  foreach ($entry in $collectorOutput) {
-    $results[$entry.Name] = $entry.Data
-  }
-  $results['Meta'] = @{
-    Timestamp = (Get-Date).ToString('o')
-    Toolkit   = 'ServerAuditToolkitV2'
-    Host      = $env:COMPUTERNAME
-    PSVersion = $PSVersionTable.PSVersion.ToString()
-  }
-  return $results
-}
-# Ensure $OutDir has a default
+  # ---- OutDir default + ensure exists ----
   if (-not $OutDir) {
     $root = Split-Path -Parent $PSScriptRoot
     if ($root -like '*\src') { $root = Split-Path -Parent $root }
@@ -74,25 +32,70 @@ Get-ChildItem "$PSScriptRoot\Collectors\*.ps1" | ForEach-Object { . $_.FullName 
   }
   New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-# Save the main dataset
-$ts = Get-Date -Format 'yyyyMMdd_HHmmss'
-$base = Join-Path $OutDir ("data_{0}" -f $ts)
-$null = Export-SATData -Object $results -PathBase $base -Depth 6
+  $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
 
-# Build Migration Units + Findings
-$units    = New-SATMigrationUnits -Data $results
-$rules    = Get-SATDefaultReadinessRules
-$findings = Evaluate-SATReadiness -Units $units -Rules $rules
+  # ---- Remote capability probe (PS2-safe) ----
+  $capPerServer = @{}
+  foreach ($c in $ComputerName) {
+    try {
+      Write-Log Info ("Capability probe on {0}" -f $c)
+      $cap = Invoke-Command -ComputerName $c -ScriptBlock {
+        $o = @{}
+        if ($PSVersionTable) { $o['PSVersion'] = $PSVersionTable.PSVersion.Major } else { $o['PSVersion'] = 2 }
+        $o['HasServerMgr']      = [bool](Get-Module -ListAvailable -Name ServerManager -ErrorAction SilentlyContinue)
+        $o['HasDnsModule']      = [bool](Get-Module -ListAvailable -Name DnsServer     -ErrorAction SilentlyContinue) -or [bool](Get-Module -ListAvailable -Name DNS -ErrorAction SilentlyContinue)
+        $o['HasDhcpModule']     = [bool](Get-Module -ListAvailable -Name DhcpServer    -ErrorAction SilentlyContinue)
+        $o['HasIISModule']      = [bool](Get-Module -ListAvailable -Name WebAdministration -ErrorAction SilentlyContinue)
+        $o['HasHyperVModule']   = [bool](Get-Module -ListAvailable -Name Hyper-V       -ErrorAction SilentlyContinue)
+        $o['HasSmbModule']      = [bool](Get-Command Get-SmbShare -ErrorAction SilentlyContinue) -or [bool](Get-Module -ListAvailable -Name SmbShare -ErrorAction SilentlyContinue)
+        $o['HasADModule']       = [bool](Get-Module -ListAvailable -Name ActiveDirectory -ErrorAction SilentlyContinue)
+        $o['HasNetTCPIP']       = [bool](Get-Module -ListAvailable -Name NetTCPIP      -ErrorAction SilentlyContinue)
+        $o['HasNetLbfo']        = [bool](Get-Module -ListAvailable -Name NetLbfo       -ErrorAction SilentlyContinue)
+        $o['HasStorage']        = [bool](Get-Module -ListAvailable -Name Storage       -ErrorAction SilentlyContinue)
+        $o['HasScheduledTasks'] = [bool](Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)
+        $o['HasLocalAccounts']  = [bool](Get-Command Get-LocalUser     -ErrorAction SilentlyContinue)
+        $o['HasPrintModule']    = [bool](Get-Module -ListAvailable -Name PrintManagement -ErrorAction SilentlyContinue)
+        return $o
+      }
+      $capPerServer[$c] = $cap
+    } catch {
+      Write-Log Warn ("Capability probe failed on {0}: {1}" -f $c, $_.Exception.Message)
+      $capPerServer[$c] = @{ PSVersion=2 }
+    }
+  }
 
-# Persist MUs (JSON if available, else CLIXML)
-$muBase = Join-Path $OutDir ("migration_units_{0}" -f $ts)
-$null = Export-SATData -Object $units -PathBase $muBase -Depth 6
+  # ---- Run collectors (sequential; PS2-stable) ----
+  $collectorNames = @(
+    'Get-SATSystem','Get-SATRolesFeatures','Get-SATNetwork','Get-SATStorage',
+    'Get-SATADDS','Get-SATDNS','Get-SATDHCP','Get-SATSMB',
+    'Get-SATIIS','Get-SATHyperV','Get-SATCertificates','Get-SATScheduledTasks',
+    'Get-SATLocalAccounts','Get-SATPrinters'
+  )
 
-# Ensure CSV dir, then CSVs
-$csvDir = Join-Path $OutDir 'csv'
-New-Item -ItemType Directory -Force -Path $csvDir | Out-Null
-$units    | Select Id,Kind,Server,Name,Summary,Confidence | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'migration_units.csv')
-$findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'readiness_findings.csv')
+  $results = @{}
+  foreach ($fn in $collectorNames) {
+    if (-not (Get-Command $fn -ErrorAction SilentlyContinue)) { continue }
+    Write-Log Info ("Collector: {0}" -f $fn)
+    $results[$fn] = @{}
+    foreach ($c in $ComputerName) {
+      try {
+        $cap = $capPerServer[$c]
+        $part = & $fn -ComputerName @($c) -Capability $cap
+        if ($part -and ($part -is [hashtable]) -and $part.ContainsKey($c)) {
+          $results[$fn][$c] = $part[$c]
+        } else {
+          $results[$fn][$c] = $part
+        }
+      } catch {
+        Write-Log Error ("Collector {0} failed on {1}: {2}" -f $fn,$c,$_.Exception.Message)
+        $results[$fn][$c] = @{ Error = $_.Exception.Message }
+      }
+    }
+  }
 
-# Render the report
-$null = New-SATReport -Data $results -Units $units -Findings $findings -OutDir $OutDir -Timestamp $ts -Verbose:$VerbosePreference
+  # ---- Persist dataset (JSON if available, else CLIXML) ----
+  $base = Join-Path $OutDir ("data_{0}" -f $ts)
+  $null = Export-SATData -Object $results -PathBase $base -Depth 6
+
+  # ---- Migration units + findings ----
+  $units    = New-SATMigrationUnits -Data $res
