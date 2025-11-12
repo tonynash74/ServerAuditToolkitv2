@@ -42,15 +42,14 @@ $dataset = Invoke-ServerAudit -ComputerName $ComputerName -NoParallel:$NoParalle
 
 # Persist JSON if the module didn’t already
 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
-$dataPath = Join-Path $OutDir "data_$ts.json"
+$base = Join-Path $OutDir "data_$ts"
 try {
-  if (-not (Test-Path $dataPath)) {
-    $dataset | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path $dataPath
-    Write-Verbose "[SAT] JSON saved: $dataPath"
-  }
+  $null = Export-SATData -Object $dataset -PathBase $base -Depth 6
+  Write-Verbose "[SAT] Data saved (JSON or CLIXML depending on PS version): $base.*"
 } catch {
-  Write-Warning "[SAT] Could not save JSON: $($_.Exception.Message)"
+  Write-Warning "[SAT] Could not persist data: $($_.Exception.Message)"
 }
+
 
 Write-Verbose "[SAT] Done. See outputs in $OutDir"
 return $dataset
