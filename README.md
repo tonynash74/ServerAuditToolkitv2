@@ -1,10 +1,18 @@
-# ServerAuditToolkitV2
+﻿# ServerAuditToolkitV2
 
-> A production‑ready, modular PowerShell toolkit that inventories Windows Server (latest → 2012 R2/PowerShell 4.0) and generates a migration‑readiness report.
+## Project docs
 
-- **Read‑only** collectors (IIS, Hyper‑V, DHCP, DNS, SMB, Storage, Network, Certificates, AD DS, Scheduled Tasks, Local Accounts)
-- **Back‑compat aware**: prefers modern cmdlets, falls back to WMI/`netsh`/`appcmd`/other supported methods when modules are missing
-- **Fast**: runspace pool parallelism, lean objects (hashtables), per‑area CSVs + Bootstrap HTML report
+-  **[RUNBOOK.md](./RUNBOOK.md)**  How to set up, run, and interpret outputs
+-  **[DEVELOPERS.md](./DEVELOPERS.md)**  Coding standards (PS2-safe), collectors, rules, report wiring, and contrib guide
+
+> Tip: The runbook also covers outputs like eport_<timestamp>.html, eport_data_<timestamp>.html, per-area CSVs, and the
+> new timestamped logs: sat_<timestamp>.log and console_<timestamp>.txt.
+
+> A productionâ€‘ready, modular PowerShell toolkit that inventories Windows Server (latest â†’ 2012 R2/PowerShell 4.0) and generates a migrationâ€‘readiness report.
+
+- **Readâ€‘only** collectors (IIS, Hyperâ€‘V, DHCP, DNS, SMB, Storage, Network, Certificates, AD DS, Scheduled Tasks, Local Accounts)
+- **Backâ€‘compat aware**: prefers modern cmdlets, falls back to WMI/`netsh`/`appcmd`/other supported methods when modules are missing
+- **Fast**: runspace pool parallelism, lean objects (hashtables), perâ€‘area CSVs + Bootstrap HTML report
 
 ---
 
@@ -41,9 +49,9 @@
 
 ## Security & Permissions
 
-- Collectors are **read‑only**. No configuration changes are performed.
-- Run the audit under an account that has **local administrator** rights on target servers (required for some areas like IIS/Hyper‑V/SMB ACLs/netsh queries).
-- Remote file access to `\\<server>\ADMIN$` is used by a few fallbacks (e.g., DHCP `netsh` export). Ensure it’s accessible to your admin account.
+- Collectors are **readâ€‘only**. No configuration changes are performed.
+- Run the audit under an account that has **local administrator** rights on target servers (required for some areas like IIS/Hyperâ€‘V/SMB ACLs/netsh queries).
+- Remote file access to `\\<server>\ADMIN$` is used by a few fallbacks (e.g., DHCP `netsh` export). Ensure itâ€™s accessible to your admin account.
 - Reports and CSVs contain sensitive infra details (IPs, shares, accounts). **Handle outputs securely.**
 
 ---
@@ -80,7 +88,7 @@ Audit **multiple remote servers** (current user context via WinRM):
 .\src\Invoke-ServerAudit.ps1 -ComputerName srv1,srv2,srv3 -Verbose
 ```
 
-Disable parallelism (useful on low‑spec hosts or when debugging):
+Disable parallelism (useful on lowâ€‘spec hosts or when debugging):
 
 ```powershell
 .\src\Invoke-ServerAudit.ps1 -ComputerName srv1,srv2 -NoParallel -Verbose
@@ -92,14 +100,14 @@ Change the output directory:
 .\src\Invoke-ServerAudit.ps1 -OutDir C:\Temp\SATV2 -Verbose
 ```
 
-> By default, the toolkit uses PowerShell remoting with your current credentials. If cross‑domain/isolated environments prevent this, run the toolkit **locally** on each target with an admin account.
+> By default, the toolkit uses PowerShell remoting with your current credentials. If crossâ€‘domain/isolated environments prevent this, run the toolkit **locally** on each target with an admin account.
 
 ---
 
 ## Usage
 
 ### Targeting multiple servers
-- Pass a comma‑separated list to `-ComputerName`.
+- Pass a commaâ€‘separated list to `-ComputerName`.
 - All collectors run in parallel (runspace pool) across the list. Some servers may finish sooner than others; progress is emitted via `-Verbose`.
 
 ### Controlling parallelism
@@ -108,7 +116,7 @@ Change the output directory:
 
 ### Where outputs go
 
-After each run you’ll get:
+After each run youâ€™ll get:
 
 ```
 out/
@@ -118,9 +126,9 @@ out/
   csv/
     iis_sites.csv                # IIS sites
     iis_pools.csv                # IIS app pools
-    hyperv_vms.csv               # Hyper‑V VMs
+    hyperv_vms.csv               # Hyperâ€‘V VMs
     smb_shares.csv               # SMB shares
-    smb_ntfs_top.csv             # top‑level NTFS ACLs for shares
+    smb_ntfs_top.csv             # topâ€‘level NTFS ACLs for shares
     certificates.csv             # machine cert stores (selected stores)
     network_adapters.csv         # adapters + IPs + DNS + gateway
     storage_volumes.csv          # volumes (size, free, health)
@@ -136,7 +144,7 @@ Each collector returns a hashtable keyed by server for speed & easy merging.
 
 | Collector | What it gathers | Preferred method | Fallback(s) |
 |---|---|---|---|
-| System | OS/version/build, uptime, hardware, CPU, memory | `Win32_*` WMI | — |
+| System | OS/version/build, uptime, hardware, CPU, memory | `Win32_*` WMI | â€” |
 | Roles & Features | Installed/available roles & features | `Get-WindowsFeature` | `Win32_ServerFeature` (installed only) |
 | Network | NICs, IPs, gateways, DNS, routes, firewall profiles | `NetTCPIP`/`NetLbfo` | `Win32_NetworkAdapterConfiguration`, `ipconfig`, `route`, `netsh`, `netstat` |
 | Storage | Disks/partitions/volumes, BitLocker, Dedup (if present) | `Storage` + `BitLocker`/`Deduplication` | `Win32_*`, `manage-bde` |
@@ -144,9 +152,9 @@ Each collector returns a hashtable keyed by server for speed & easy merging.
 | DNS | Zones, forwarders | `DnsServer` | WMI `root\MicrosoftDNS` |
 | DHCP | Scopes, options, lease counts | `DhcpServer` | `netsh dhcp server export` (temp file) |
 | IIS | Sites, bindings, pools, http.sys SSL | `WebAdministration` | `appcmd.exe` XML |
-| Hyper‑V | VMs, NICs, disks, switches | `Hyper‑V` | WMI `root\virtualization(\v2)` |
-| SMB | Shares + top‑level NTFS ACLs | `SmbShare` + `Get-Acl` | `Win32_Share`, `net share` |
-| Certificates | Selected LocalMachine stores + http.sys SSL | `cert:` provider | — |
+| Hyperâ€‘V | VMs, NICs, disks, switches | `Hyperâ€‘V` | WMI `root\virtualization(\v2)` |
+| SMB | Shares + topâ€‘level NTFS ACLs | `SmbShare` + `Get-Acl` | `Win32_Share`, `net share` |
+| Certificates | Selected LocalMachine stores + http.sys SSL | `cert:` provider | â€” |
 | Scheduled Tasks | Tasks, state, next/last run | `ScheduledTasks` | `schtasks /Query /V /FO CSV` |
 | Local Accounts | Users, groups, membership | `LocalAccounts` | `Win32_UserAccount`/`Win32_Group`, `net localgroup` |
 
@@ -161,24 +169,24 @@ Each collector returns a hashtable keyed by server for speed & easy merging.
 **DHCP fallback export fails**
 - The fallback writes an interim XML under `\\<server>\ADMIN$\Temp`. Ensure `ADMIN$` is reachable and your account has permissions.
 
-**IIS or Hyper‑V collectors return empty**
-- If role modules aren’t present, the tool uses `appcmd` (IIS) or WMI (Hyper‑V). On role‑less servers, these will naturally be empty.
+**IIS or Hyperâ€‘V collectors return empty**
+- If role modules arenâ€™t present, the tool uses `appcmd` (IIS) or WMI (Hyperâ€‘V). On roleâ€‘less servers, these will naturally be empty.
 
 **Report opens without styling**
-- The HTML references Bootstrap via CDN. If your environment is offline, the report still renders content; to make it fully self‑contained, consider enabling a future "single‑file" mode (see Issues).
+- The HTML references Bootstrap via CDN. If your environment is offline, the report still renders content; to make it fully selfâ€‘contained, consider enabling a future "singleâ€‘file" mode (see Issues).
 
 **Large estates (hundreds of servers)**
 - Run from a jump host close to targets.
 - Consider splitting the `-ComputerName` list into batches.
-- Use `-NoParallel` if endpoints are resource‑constrained or you see throttling by security tools.
+- Use `-NoParallel` if endpoints are resourceâ€‘constrained or you see throttling by security tools.
 
 ---
 
 ## Performance tips
 
 - The toolkit uses a **runspace pool** for concurrency. You can tune the throttle in `src/Private/Parallel.ps1`.
-- Some collectors cap heavy enumerations (e.g., top‑level NTFS ACLs, scheduled tasks). Adjust caps in collector parameters if needed.
-- Temporary data is kept in in‑memory **hashtables** to avoid unnecessary object overhead.
+- Some collectors cap heavy enumerations (e.g., topâ€‘level NTFS ACLs, scheduled tasks). Adjust caps in collector parameters if needed.
+- Temporary data is kept in inâ€‘memory **hashtables** to avoid unnecessary object overhead.
 
 ---
 
@@ -204,38 +212,38 @@ GitHub Actions CI is included under `.github/workflows/ci.yml` (lint + tests on 
 
 ```
 ServerAuditToolkitV2/
-├─ src/
-│  ├─ ServerAuditToolkitV2.psd1        # module manifest
-│  ├─ ServerAuditToolkitV2.psm1        # module (orchestrator + exports)
-│  ├─ Invoke-ServerAudit.ps1           # entry point script
-│  ├─ Private/                         # helpers
-│  │   ├─ Logging.ps1
-│  │   ├─ Parallel.ps1
-│  │   ├─ Capability.ps1
-│  │   └─ Report.ps1                   # CSV exports + Bootstrap HTML
-│  └─ Collectors/                      # modular collectors (Get-SAT*)
-│      ├─ 00-System.ps1
-│      ├─ 10-RolesFeatures.ps1
-│      ├─ 20-Network.ps1
-│      ├─ 30-Storage.ps1
-│      ├─ 40-ADDS.ps1
-│      ├─ 45-DNS.ps1
-│      ├─ 50-DHCP.ps1
-│      ├─ 55-SMB.ps1
-│      ├─ 60-IIS.ps1
-│      ├─ 70-HyperV.ps1
-│      ├─ 80-Certificates.ps1
-│      ├─ 85-ScheduledTasks.ps1
-│      └─ 90-LocalAccounts.ps1
-├─ tests/                              # Pester tests
-│  ├─ Unit/
-│  └─ Integration/
-├─ out/                                # generated artifacts (gitignored)
-├─ .github/workflows/ci.yml
-├─ PSScriptAnalyzerSettings.psd1
-├─ .gitignore
-├─ LICENSE
-└─ README.md
+â”œâ”€ src/
+â”‚  â”œâ”€ ServerAuditToolkitV2.psd1        # module manifest
+â”‚  â”œâ”€ ServerAuditToolkitV2.psm1        # module (orchestrator + exports)
+â”‚  â”œâ”€ Invoke-ServerAudit.ps1           # entry point script
+â”‚  â”œâ”€ Private/                         # helpers
+â”‚  â”‚   â”œâ”€ Logging.ps1
+â”‚  â”‚   â”œâ”€ Parallel.ps1
+â”‚  â”‚   â”œâ”€ Capability.ps1
+â”‚  â”‚   â””â”€ Report.ps1                   # CSV exports + Bootstrap HTML
+â”‚  â””â”€ Collectors/                      # modular collectors (Get-SAT*)
+â”‚      â”œâ”€ 00-System.ps1
+â”‚      â”œâ”€ 10-RolesFeatures.ps1
+â”‚      â”œâ”€ 20-Network.ps1
+â”‚      â”œâ”€ 30-Storage.ps1
+â”‚      â”œâ”€ 40-ADDS.ps1
+â”‚      â”œâ”€ 45-DNS.ps1
+â”‚      â”œâ”€ 50-DHCP.ps1
+â”‚      â”œâ”€ 55-SMB.ps1
+â”‚      â”œâ”€ 60-IIS.ps1
+â”‚      â”œâ”€ 70-HyperV.ps1
+â”‚      â”œâ”€ 80-Certificates.ps1
+â”‚      â”œâ”€ 85-ScheduledTasks.ps1
+â”‚      â””â”€ 90-LocalAccounts.ps1
+â”œâ”€ tests/                              # Pester tests
+â”‚  â”œâ”€ Unit/
+â”‚  â””â”€ Integration/
+â”œâ”€ out/                                # generated artifacts (gitignored)
+â”œâ”€ .github/workflows/ci.yml
+â”œâ”€ PSScriptAnalyzerSettings.psd1
+â”œâ”€ .gitignore
+â”œâ”€ LICENSE
+â””â”€ README.md
 ```
 
 ---
@@ -248,5 +256,6 @@ Issues and PRs are welcome. Please run Pester tests and ScriptAnalyzer locally b
 
 ## License
 
-MIT © YourOrg
+MIT Â© YourOrg
+
 
