@@ -1,0 +1,18 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PSScriptAnalyzer & Pester
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          Install-Module Pester -Scope CurrentUser -Force
+      - name: Lint
+        shell: pwsh
+        run: Invoke-ScriptAnalyzer -Path ./src -Settings ./PSScriptAnalyzerSettings.psd1 -Recurse -Severity Warning,Error
+      - name: Test
+        shell: pwsh
+        run: Invoke-Pester -Path ./tests -CI -Output Detailed
