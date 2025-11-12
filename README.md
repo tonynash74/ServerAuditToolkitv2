@@ -5,7 +5,9 @@
 -  **[RUNBOOK.md](./RUNBOOK.md)**  How to set up, run, and interpret outputs
 -  **[DEVELOPERS.md](./DEVELOPERS.md)**  Coding standards (PS2-safe), collectors, rules, report wiring, and contrib guide
 
-> Tip: The runbook also covers outputs like eport_<timestamp>.html, eport_data_<timestamp>.html, per-area CSVs, and the
+> Tip: The runbook also covers outputs like 
+eport_<timestamp>.html, 
+eport_data_<timestamp>.html, per-area CSVs, and the
 > new timestamped logs: sat_<timestamp>.log and console_<timestamp>.txt.
 
 > A productionâ€‘ready, modular PowerShell toolkit that inventories Windows Server (latest â†’ 2012 R2/PowerShell 4.0) and generates a migrationâ€‘readiness report.
@@ -49,9 +51,9 @@
 
 ## Security & Permissions
 
-- Collectors are **readâ€‘only**. No configuration changes are performed.
-- Run the audit under an account that has **local administrator** rights on target servers (required for some areas like IIS/Hyperâ€‘V/SMB ACLs/netsh queries).
-- Remote file access to `\\<server>\ADMIN$` is used by a few fallbacks (e.g., DHCP `netsh` export). Ensure itâ€™s accessible to your admin account.
+- Collectors are **read only**. No configuration changes are performed.
+- Run the audit under an account that has **local administrator** rights on target servers (required for some areas like IIS/Hyper V/SMB ACLs/netsh queries).
+- Remote file access to `\\<server>\ADMIN$` is used by a few fallbacks (e.g., DHCP `netsh` export). Ensure it's accessible to your admin account.
 - Reports and CSVs contain sensitive infra details (IPs, shares, accounts). **Handle outputs securely.**
 
 ---
@@ -256,6 +258,7 @@ Issues and PRs are welcome. Please run Pester tests and ScriptAnalyzer locally b
 
 ## License
 
-MIT Â© YourOrg
+MIT @ YourOrg
+
 
 
