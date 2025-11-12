@@ -43,17 +43,17 @@ function Invoke-ServerAudit {
         $o = @{}
         if ($PSVersionTable) { $o['PSVersion'] = $PSVersionTable.PSVersion.Major } else { $o['PSVersion'] = 2 }
         $o['HasServerMgr']      = [bool](Get-Module -ListAvailable -Name ServerManager -ErrorAction SilentlyContinue)
-        $o['HasDnsModule']      = [bool](Get-Module -ListAvailable -Name DnsServer     -ErrorAction SilentlyContinue) -or [bool](Get-Module -ListAvailable -Name DNS -ErrorAction SilentlyContinue)
-        $o['HasDhcpModule']     = [bool](Get-Module -ListAvailable -Name DhcpServer    -ErrorAction SilentlyContinue)
+        $o['HasDnsModule']      = [bool](Get-Module -ListAvailable -Name DnsServer -ErrorAction SilentlyContinue) -or [bool](Get-Module -ListAvailable -Name DNS -ErrorAction SilentlyContinue)
+        $o['HasDhcpModule']     = [bool](Get-Module -ListAvailable -Name DhcpServer -ErrorAction SilentlyContinue)
         $o['HasIISModule']      = [bool](Get-Module -ListAvailable -Name WebAdministration -ErrorAction SilentlyContinue)
-        $o['HasHyperVModule']   = [bool](Get-Module -ListAvailable -Name Hyper-V       -ErrorAction SilentlyContinue)
+        $o['HasHyperVModule']   = [bool](Get-Module -ListAvailable -Name Hyper-V -ErrorAction SilentlyContinue)
         $o['HasSmbModule']      = [bool](Get-Command Get-SmbShare -ErrorAction SilentlyContinue) -or [bool](Get-Module -ListAvailable -Name SmbShare -ErrorAction SilentlyContinue)
         $o['HasADModule']       = [bool](Get-Module -ListAvailable -Name ActiveDirectory -ErrorAction SilentlyContinue)
-        $o['HasNetTCPIP']       = [bool](Get-Module -ListAvailable -Name NetTCPIP      -ErrorAction SilentlyContinue)
-        $o['HasNetLbfo']        = [bool](Get-Module -ListAvailable -Name NetLbfo       -ErrorAction SilentlyContinue)
-        $o['HasStorage']        = [bool](Get-Module -ListAvailable -Name Storage       -ErrorAction SilentlyContinue)
+        $o['HasNetTCPIP']       = [bool](Get-Module -ListAvailable -Name NetTCPIP -ErrorAction SilentlyContinue)
+        $o['HasNetLbfo']        = [bool](Get-Module -ListAvailable -Name NetLbfo -ErrorAction SilentlyContinue)
+        $o['HasStorage']        = [bool](Get-Module -ListAvailable -Name Storage -ErrorAction SilentlyContinue)
         $o['HasScheduledTasks'] = [bool](Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)
-        $o['HasLocalAccounts']  = [bool](Get-Command Get-LocalUser     -ErrorAction SilentlyContinue)
+        $o['HasLocalAccounts']  = [bool](Get-Command Get-LocalUser -ErrorAction SilentlyContinue)
         $o['HasPrintModule']    = [bool](Get-Module -ListAvailable -Name PrintManagement -ErrorAction SilentlyContinue)
         return $o
       }
@@ -98,4 +98,32 @@ function Invoke-ServerAudit {
   $null = Export-SATData -Object $results -PathBase $base -Depth 6
 
   # ---- Migration units + findings ----
-  $units    = New-SATMigrationUnits -Data $res
+  $units    = New-SATMigrationUnits -Data $results
+  $rules    = Get-SATDefaultReadinessRules
+  $findings = Evaluate-SATReadiness -Units $units -Rules $rules
+
+  # ---- Persist MU & Findings CSVs ----
+  $muBase = Join-Path $OutDir ("migration_units_{0}" -f $ts)
+  $null = Export-SATData -Object $units -PathBase $muBase -Depth 6
+
+  $csvDir = Join-Path $OutDir 'csv'
+  New-Item -ItemType Directory -Force -Path $csvDir | Out-Null
+  if ($units)    { $units    | Select Id,Kind,Server,Name,Summary,Confidence | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'migration_units.csv') }
+  if ($findings) { $findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId     | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'readiness_findings.csv') }
+
+  # ---- HTML Report ----
+  $null = New-SATReport -Data $results -Units $units -Findings $findings -OutDir $OutDir -Timestamp $ts
+
+  return $results
+}
+
+# Explicit export (manifest also lists these)
+Export-ModuleMember -Function `
+  Invoke-ServerAudit, `
+  Get-SATSystem,Get-SATRolesFeatures,Get-SATNetwork,Get-SATStorage, `
+  Get-SATADDS,Get-SATDNS,Get-SATDHCP,Get-SATSMB, `
+  Get-SATIIS,Get-SATHyperV,Get-SATCertificates,Get-SATScheduledTasks, `
+  Get-SATLocalAccounts,Get-SATPrinters, `
+  Export-SATData,Write-SATCsv,New-SATReport, `
+  Get-SATDefaultReadinessRules,New-SATMigrationUnits,Evaluate-SATReadiness
+# ---- EOF ----

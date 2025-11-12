@@ -140,74 +140,67 @@ function New-SATReport {
   if ($Data -and $Data['Get-SATNetwork']) {
     foreach ($srv in @($Data['Get-SATNetwork'].Keys)) {
       $n = $Data['Get-SATNetwork'][$srv]
+
+      # map adapters by name/description
       $adapters = @{}
       foreach ($a in @($n.Adapters)) {
-        $name = $null
-        if ($a -and $a.PSObject.Properties['Name']) { $name = $a.Name }
-        if ($name) { $adapters[$name.ToLower()] = $a }
+        $nm = $null
+        if ($a -and $a.PSObject -and $a.PSObject.Properties['Name']) { $nm = $a.Name }
+        if (-not $nm -and $a -and $a.PSObject.Properties['InterfaceAlias']) { $nm = $a.InterfaceAlias }
+        if (-not $nm -and $a -and $a.PSObject.Properties['Description']) { $nm = $a.Description }
+        if ($nm) { $adapters[$nm.ToLower()] = $a }
       }
 
       foreach ($cfg in @($n.IPConfig)) {
-        $ = $null
-        if ($cfg -and $cfg.PSObject.Properties['Interface        $mac   = $null; if ($a -and $a.PSObject.Properties['MacAddress']) { $mac = $a.MacAddress }
-        $stat  = $null; if ($a -and $a.PSObject.Properties['InterfaceOperationalStatus']) { $stat = $a.InterfaceOperationalStatus }
-        $speed = $null; if ($a -and $a.PSObject.Properties['LinkSpeed']) { $speed = $a.LinkSpeed }
-
-        $netRows += New-Object PSObject -Property @{
-          Server     = $srv
-          Interface  = $alias
-          MAC        = $mac
-          Status     = $stat
-          Speed      = $speed
-          IPv4       = ($ipv4list -join ',')
-          IPv6       = ($ipv6list -join ',')
-          Gateway    = $gw
-          DNS        = ($dnslist -join ',')
-          DHCP       = (if ($cfg -and $cfg.PSObject.Properties['DHCP']) { $cfg.DHCP } else { $null })
-        }
-']) { $alias = $cfg.InterfaceAlias }
-        if (-not $alias -and $cfg -and $cfg.PSObject.Properties['Description']) { $alias = $cfg.Description }
+        $alias = $null
+        if ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['InterfaceAlias']) { $alias = $cfg.InterfaceAlias }
+        if (-not $alias -and $cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['Description']) { $alias = $cfg.Description }
 
         $akey = $null; if ($alias) { $akey = $alias.ToLower() }
         $a = $null; if ($akey -and $adapters.ContainsKey($akey)) { $a = $adapters[$akey] }
 
+        # IPv4 list
         $ipv4list = @()
-        if ($cfg -and $cfg.PSObject.Properties['IPv4Address']) {
+        if ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['IPv4Address']) {
           foreach ($i in @($cfg.IPv4Address)) {
             if ($i -and $i.PSObject -and $i.PSObject.Properties['IPAddress']) { $ipv4list += $i.IPAddress } else { $ipv4list += "$i" }
           }
-        } elseif ($cfg -and $cfg.PSObject.Properties['IPv4']) {
+        } elseif ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['IPv4']) {
           $ipv4list += @($cfg.IPv4)
         }
 
+        # IPv6 list
         $ipv6list = @()
-        if ($cfg -and $cfg.PSObject.Properties['IPv6Address']) {
+        if ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['IPv6Address']) {
           foreach ($i6 in @($cfg.IPv6Address)) {
             if ($i6 -and $i6.PSObject -and $i6.PSObject.Properties['IPAddress']) { $ipv6list += $i6.IPAddress } else { $ipv6list += "$i6" }
           }
-        } elseif ($cfg -and $cfg.PSObject.Properties['IPv6']) {
+        } elseif ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['IPv6']) {
           $ipv6list += @($cfg.IPv6)
         }
 
+        # Gateway
         $gw = $null
-        if ($cfg -and $cfg.PSObject.Properties['Ipv4DefaultGateway']) {
+        if ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['Ipv4DefaultGateway']) {
           $gobj = $cfg.Ipv4DefaultGateway
           if ($gobj -and $gobj.PSObject -and $gobj.PSObject.Properties['NextHop']) { $gw = $gobj.NextHop }
         }
 
+        # DNS
         $dnslist = @()
-        if ($cfg -and $cfg.PSObject.Properties['DNSServer']) {
+        if ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['DNSServer']) {
           foreach ($d in @($cfg.DNSServer)) {
             if ($d -and $d.PSObject -and $d.PSObject.Properties['ServerAddresses']) { $dnslist += $d.ServerAddresses } else { $dnslist += "$d" }
           }
-        } elseif ($cfg -and $cfg.PSObject.Properties['DNS']) {
+        } elseif ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['DNS']) {
           $dnslist += @($cfg.DNS)
         }
 
-                $mac   = $null; if ($a -and $a.PSObject.Properties['MacAddress']) { $mac = $a.MacAddress }
-        $stat  = $null; if ($a -and $a.PSObject.Properties['InterfaceOperationalStatus']) { $stat = $a.InterfaceOperationalStatus }
-        $speed = $null; if ($a -and $a.PSObject.Properties['LinkSpeed']) { $speed = $a.LinkSpeed }
-        $dhcpVal = $null; if ($cfg -and $cfg.PSObject.Properties['DHCP']) { $dhcpVal = $cfg.DHCP }
+        # Adapter attributes
+        $mac   = $null; if ($a -and $a.PSObject -and $a.PSObject.Properties['MacAddress']) { $mac = $a.MacAddress }
+        $stat  = $null; if ($a -and $a.PSObject -and $a.PSObject.Properties['InterfaceOperationalStatus']) { $stat = $a.InterfaceOperationalStatus }
+        $speed = $null; if ($a -and $a.PSObject -and $a.PSObject.Properties['LinkSpeed']) { $speed = $a.LinkSpeed }
+        $dhcpVal = $null; if ($cfg -and $cfg.PSObject -and $cfg.PSObject.Properties['DHCP']) { $dhcpVal = $cfg.DHCP }
 
         $netRows += New-Object PSObject -Property @{
           Server     = $srv
@@ -221,7 +214,6 @@ function New-SATReport {
           DNS        = ($dnslist -join ',')
           DHCP       = $dhcpVal
         }
-
       }
     }
   }
@@ -286,12 +278,12 @@ function New-SATReport {
       }
       foreach ($pt in @($Data['Get-SATPrinters'][$srv].Ports)) {
         $hostAddr = $null
-        if ($pt -and $pt.PSObject.Properties['PrinterHostAddress']) { $hostAddr = $pt.PrinterHostAddress }
-        elseif ($pt -and $pt.PSObject.Properties['HostAddress'])    { $hostAddr = $pt.HostAddress }
+        if ($pt -and $pt.PSObject -and $pt.PSObject.Properties['PrinterHostAddress']) { $hostAddr = $pt.PrinterHostAddress }
+        elseif ($pt -and $pt.PSObject -and $pt.PSObject.Properties['HostAddress'])    { $hostAddr = $pt.HostAddress }
 
         $snmp = $null
-        if ($pt -and $pt.PSObject.Properties['SnmpEnabled']) { $snmp = $pt.SnmpEnabled }
-        elseif ($pt -and $pt.PSObject.Properties['SNMPEnabled']) { $snmp = $pt.SNMPEnabled }
+        if ($pt -and $pt.PSObject -and $pt.PSObject.Properties['SnmpEnabled']) { $snmp = $pt.SnmpEnabled }
+        elseif ($pt -and $pt.PSObject -and $pt.PSObject.Properties['SNMPEnabled']) { $snmp = $pt.SNMPEnabled }
 
         $portRows += New-Object PSObject -Property @{
           Server=$srv; Name=$pt.Name; HostAddress=$hostAddr; PortNumber=$pt.PortNumber; SnmpEnabled=$snmp
@@ -339,14 +331,6 @@ function New-SATReport {
   if ($csvGroups)   { $quickLinks += "<li><a href='./csv/local_groups.csv'>Local Groups CSV</a></li>" }
   if ($csvMembers)  { $quickLinks += "<li><a href='./csv/local_group_members.csv'>Local Group Members CSV</a></li>" }
 
-  # ---------- Markdown summary ----------
-  $summary = @"
-# ServerAuditToolkitV2 Migration Readiness
-Run: $Timestamp
-"@
-  $md = Join-Path $OutDir "summary_$Timestamp.md"
-  $summary | Set-Content -Path $md -Encoding UTF8
-
   # ---------- HTML ----------
   $html = @"
 <!doctype html>
@@ -384,18 +368,6 @@ Run: $Timestamp
         <h5 class="card-title">Quick links</h5>
         <ul>$quickLinks</ul>
       </div></div>
-    </div>
-  </div>
-
-  <div class="card shadow-sm mt-3">
-    <div class="card-body">
-      <h5 class="card-title">Discovery confidence</h5>
-      <div class="progress" style="height:24px">
-        <div class="progress-bar bg-success" role="progressbar" style="width: ${hiPct}%">${hiPct}% high</div>
-        <div class="progress-bar bg-warning" role="progressbar" style="width: ${mdPct}%">${mdPct}% medium</div>
-        <div class="progress-bar bg-danger"  role="progressbar" style="width: ${loPct}%">${loPct}% low</div>
-      </div>
-      <small class="text-muted">Confidence reflects collection path (module > WMI > fallback).</small>
     </div>
   </div>
 

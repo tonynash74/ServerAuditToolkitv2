@@ -7,132 +7,155 @@
     try {
       Write-Log Info ("IIS inventory on {0}" -f $c)
 
-      $useModule = $Capability.HasIISModule
+      $scr = {
+        $res = @{ Sites=@(); AppPools=@(); Notes=''; Error=$null }
 
-      if ($useModule) {
-        $scr = {
-          Import-Module WebAdministration -ErrorAction SilentlyContinue | Out-Null
-
-          $sites = @()
-          try {
-            $sitesRaw = Get-Website -ErrorAction SilentlyContinue
-            foreach ($s in $sitesRaw) {
-              $bindings = @()
-              try {
-                $bnd = Get-WebBinding -Name $s.Name -ErrorAction SilentlyContinue
-                foreach ($b in $bnd) {
-                  $bindings += New-Object PSObject -Property @{
-                    protocol           = $b.protocol
-                    bindingInformation = $b.bindingInformation
-                    certificateHash    = $b.certificateHash
-                  }
-                }
-              } catch {}
-              $appPool = $null
-              try { $appPool = (Get-Item ("IIS:\Sites\{0}" -f $s.Name)).applicationPool } catch {}
-              $sites += New-Object PSObject -Property @{
-                Name         = $s.Name
-                Id           = $s.Id
-                State        = $s.State
-                PhysicalPath = $s.PhysicalPath
-                Bindings     = $bindings
-                AppPool      = $appPool
-              }
-            }
-          } catch {}
-
-          $pools = @()
-          try {
-            $poolItems = Get-Item 'IIS:\AppPools\*' -ErrorAction SilentlyContinue
-            foreach ($p in $poolItems) {
-              $state = $null; try { $state = (Get-WebAppPoolState -Name $p.Name -ErrorAction SilentlyContinue).Value } catch {}
-              $pools += New-Object PSObject -Property @{
-                Name           = $p.Name
-                State          = $state
-                RuntimeVersion = $p.managedRuntimeVersion
-                PipelineMode   = $p.managedPipelineMode
-                IdentityType   = $p.processModel.identityType
-                StartMode      = $p.StartMode
-                AutoStart      = $p.AutoStart
-                QueueLength    = $p.QueueLength
-              }
-            }
-          } catch {}
-
-          $ssl = (& netsh http show sslcert 2>$null)
-
-          $res = @{}
-          $res["Sites"]    = $sites
-          $res["AppPools"] = $pools
-          $res["SslBind"]  = "$ssl"
-          $res["Notes"]    = 'WebAdministration'
+        # Is IIS even installed?
+        $hasIIS = $false
+        try { $hasIIS = Test-Path 'HKLM:\SOFTWARE\Microsoft\InetStp' } catch { $hasIIS = $false }
+        if (-not $hasIIS) {
+          $res.Notes = 'IIS not installed'
           return $res
         }
 
-        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
-        $out[$c] = $res
+        # Try WebAdministration first
+        $sites=@(); $pools=@()
+        $used = 'none'
+        try {
+          Import-Module WebAdministration -ErrorAction Stop | Out-Null
+          $used = 'WebAdministration'
 
-      } else {
-        # appcmd fallback (XML parse)
-        $scr = {
-          $appcmd = "$env:SystemRoot\System32\inetsrv\appcmd.exe"
-          if (-not (Test-Path $appcmd)) { throw "appcmd.exe not found" }
-
-          $siteXml = & $appcmd list site /config /xml
-          $poolXml = & $appcmd list apppool /config /xml
-
-          $sites = @(); $pools = @()
+          # Sites
           try {
-            [xml]$sx = $siteXml
-            foreach ($s in $sx.appcmd.SITE) {
+            $sites = Get-ChildItem IIS:\Sites -ErrorAction Stop | ForEach-Object {
+              $b = @()
+              # Bindings; guard each property
               $binds = @()
-              foreach ($b in $s.bindings.binding) {
-                $binds += New-Object PSObject -Property @{
-                  protocol           = $b.'@PROTOCOL'
-                  bindingInformation = $b.'@BINDING.INFORMATION'
+              try { $binds = $_.Bindings.Collection } catch {}
+              foreach ($bb in @($binds)) {
+                $certHash = $null
+                try { if ($bb.PSObject -and $bb.PSObject.Properties['certificateHash']) { $certHash = $bb.certificateHash } } catch {}
+                $b += New-Object PSObject -Property @{
+                  protocol           = $bb.protocol
+                  bindingInformation = $bb.bindingInformation
+                  certificateHash    = $certHash
+                  thumbprint         = $certHash
                 }
               }
-              $sites += New-Object PSObject -Property @{
-                Name         = $s.'@NAME'
-                Id           = $s.'@ID'
-                State        = $s.'@STATE'
-                PhysicalPath = $s.'SITE.APPlications'.'APPLICATION'.'VIRTUAL.DIRECTORY'.'@PHYSICAL.PATH'
-                Bindings     = $binds
-                AppPool      = $s.'SITE.APPlications'.'APPLICATION'.'@APPPOOL'
+              New-Object PSObject -Property @{
+                Name=$_.Name
+                State=$_.State
+                AppPool=$_.ApplicationPool
+                PhysicalPath=$_.PhysicalPath
+                Bindings=$b
               }
             }
           } catch {}
 
+          # AppPools
           try {
-            [xml]$px = $poolXml
-            foreach ($p in $px.appcmd.APPPOOL) {
-              $pools += New-Object PSObject -Property @{
-                Name           = $p.'@NAME'
-                RuntimeVersion = $p.'APPPOOL'.managedRuntimeVersion
-                PipelineMode   = $p.'APPPOOL'.managedPipelineMode
-                AutoStart      = $p.'APPPOOL'.autoStart
-                StartMode      = $p.'APPPOOL'.startMode
+            $pools = Get-ChildItem IIS:\AppPools -ErrorAction Stop | ForEach-Object {
+              $rt = $null; $pm = $null; $id = $null
+              try { $rt = $_.managedRuntimeVersion } catch {}
+              try { $pm = $_.managedPipelineMode } catch {}
+              try { $id = $_.processModel.identityType } catch {}
+              New-Object PSObject -Property @{
+                Name=$_.Name
+                State=$_.State
+                RuntimeVersion=$rt
+                PipelineMode=$pm
+                IdentityType=$id
               }
             }
           } catch {}
 
-          $res = @{}
-          $res["Sites"]    = $sites
-          $res["AppPools"] = $pools
-          $res["SslBind"]  = ""
-          $res["Notes"]    = 'appcmd.exe fallback'
+          if ($sites -or $pools) {
+            $res.Sites   = $sites
+            $res.AppPools= $pools
+            $res.Notes   = $used
+            return $res
+          }
+        } catch {
+          # fall through to appcmd
+        }
+
+        # Fallback to appcmd
+        $appcmd = Join-Path $env:SystemRoot 'System32\inetsrv\appcmd.exe'
+        if (-not (Test-Path $appcmd)) {
+          $alt = Join-Path $env:windir 'sysnative\inetsrv\appcmd.exe'
+          if (Test-Path $alt) { $appcmd = $alt }
+        }
+
+        if (-not (Test-Path $appcmd)) {
+          $res.Error = 'appcmd.exe not found'
+          $res.Notes = 'IIS installed; admin tool unavailable'
           return $res
         }
 
-        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
-        $out[$c] = $res
+        $xmlSites = $null; $xmlPools=$null
+        try {
+          $raw1 = & $appcmd list site /config /xml 2>&1
+          if ($raw1) { $xmlSites = [xml]("<root>$raw1</root>") }
+        } catch {}
+
+        try {
+          $raw2 = & $appcmd list apppool /config /xml 2>&1
+          if ($raw2) { $xmlPools = [xml]("<root>$raw2</root>") }
+        } catch {}
+
+        $sites=@()
+        if ($xmlSites -and $xmlSites.root) {
+          foreach ($s in @($xmlSites.root.site)) {
+            $b=@()
+            foreach ($bd in @($s.bindings.add)) {
+              $certHash = $null
+              try { if ($bd.PSObject -and $bd.PSObject.Properties['certificateHash']) { $certHash = $bd.certificateHash } } catch {}
+              $b += New-Object PSObject -Property @{
+                protocol           = $bd.protocol
+                bindingInformation = $bd.bindingInformation
+                certificateHash    = $certHash
+                thumbprint         = $certHash
+              }
+            }
+            $ap   = $null
+            $path = $null
+            try { if ($s.application -and $s.application.applicationPool) { $ap = $s.application.applicationPool } } catch {}
+            try { if ($s.application -and $s.application.virtualDirectory -and $s.application.virtualDirectory.physicalPath) { $path = $s.application.virtualDirectory.physicalPath } } catch {}
+            $sites += New-Object PSObject -Property @{
+              Name=$s.name; State=$s.state; AppPool=$ap; PhysicalPath=$path; Bindings=$b
+            }
+          }
+        }
+
+        $pools=@()
+        if ($xmlPools -and $xmlPools.root) {
+          foreach ($p in @($xmlPools.root['applicationPool'])) {
+            $rt=$null; $pm=$null
+            try { $rt = $p.managedRuntimeVersion } catch {}
+            try { $pm = $p.managedPipelineMode } catch {}
+            $pools += New-Object PSObject -Property @{
+              Name=$p.name; State=$p.state; RuntimeVersion=$rt; PipelineMode=$pm; IdentityType=$null
+            }
+          }
+        }
+
+        $res.Sites    = $sites
+        $res.AppPools = $pools
+        $res.Notes    = 'appcmd'
+        return $res
+      }
+
+      $out[$c] = Invoke-Command -ComputerName $c -ScriptBlock $scr
+
+      # No throwing on expected absences; mark as Warn at most
+      if ($out[$c] -and $out[$c].Error) {
+        Write-Log Warn ("IIS on {0}: {1}" -f $c, $out[$c].Error)
       }
 
     } catch {
       Write-Log Error ("IIS collector failed on {0} : {1}" -f $c, $_.Exception.Message)
-      $out[$c] = @{ Error = $_.Exception.Message }
+      $out[$c] = @{ Sites=@(); AppPools=@(); Error=$_.Exception.Message; Notes='collector exception' }
     }
   }
   return $out
 }
-
