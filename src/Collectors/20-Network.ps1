@@ -3,104 +3,109 @@ function Get-SATNetwork {
   param(
     [string[]]$ComputerName,
     [hashtable]$Capability,
-    [switch]$IncludeListening # add if you want ports (uses Get-NetTCPConnection/netstat)
+    [switch]$IncludeListening
   )
 
   $out = @{}
   foreach ($c in $ComputerName) {
     try {
-      Write-Log Info "Network inventory on $c"
+      Write-Log Info ("Network inventory on {0}" -f $c)
 
-      if ($Capability.HasNetTCPIP) {
+      $useModern = ($Capability.HasNetTCPIP -and ((Get-SATPSMajor) -ge 3))
+
+      if ($useModern) {
         $scr = {
-          param($IncludeListening)
-          Import-Module NetTCPIP -ErrorAction Stop
+          param($incListen)
+          Import-Module NetTCPIP -ErrorAction SilentlyContinue | Out-Null
 
-          $adapters = Get-NetAdapter -Physical | Select-Object Name, InterfaceDescription, MacAddress, InterfaceOperationalStatus, LinkSpeed
-          $ipcfg    = Get-NetIPConfiguration | Select-Object InterfaceAlias, IPv4Address, IPv6Address, Ipv4DefaultGateway, DNSServer, DHCP
-          $routes   = Get-NetRoute -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object DestinationPrefix, NextHop, InterfaceAlias, RouteMetric
-          $dnsSuf   = (Get-DnsClientGlobalSetting).SuffixSearchList
+          $adapters = @()
+          try { $adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Select-Object Name, InterfaceDescription, MacAddress, InterfaceOperationalStatus, LinkSpeed } catch {}
+
+          $ipcfg = @()
+          try { $ipcfg = Get-NetIPConfiguration -ErrorAction SilentlyContinue | Select-Object InterfaceAlias, IPv4Address, IPv6Address, Ipv4DefaultGateway, DNSServer, DHCP } catch {}
+
+          $routes = @()
+          try { $routes = Get-NetRoute -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object DestinationPrefix, NextHop, InterfaceAlias, RouteMetric } catch {}
+
+          $dnsSuffix = $null
+          try { $dnsSuffix = (Get-DnsClientGlobalSetting -ErrorAction SilentlyContinue).SuffixSearchList } catch {}
+
           $teams = @()
-          try { Import-Module NetLbfo -ErrorAction Stop; $teams = Get-NetLbfoTeam | Select-Object Name, TeamingMode, LoadBalancingAlgorithm, Status } catch {}
+          try {
+            Import-Module NetLbfo -ErrorAction Stop | Out-Null
+            $teams = Get-NetLbfoTeam -ErrorAction SilentlyContinue | Select-Object Name, TeamingMode, LoadBalancingAlgorithm, Status
+          } catch {}
 
           $listening = @()
-          if ($IncludeListening) {
+          if ($incListen) {
             try {
-              $listening = Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess
+              $listening = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess
             } catch {
-              $listening = (& cmd /c 'netstat -ano' 2>$null)
+              $listening = (& cmd.exe /c 'netstat -ano' 2>$null)
             }
           }
 
-          [pscustomobject]@{
-            Adapters   = $adapters
-            IPConfig   = $ipcfg
-            RoutesV4   = $routes
-            DnsSuffix  = $dnsSuf
-            Teams      = $teams
-            Listening  = $listening
-            Firewall   = (try { Get-NetFirewallProfile | Select-Object Name, Enabled } catch { $null })
-            Notes      = 'NetTCPIP + (optional) NetLbfo'
-          }
-        }
-        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr -ArgumentList $IncludeListening.IsPresent
-        $out[$c] = @{
-          Adapters  = @($res.Adapters  | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          IPConfig  = @($res.IPConfig  | ConvertTo-Json -Depth 6 | ConvertFrom-Json)
-          RoutesV4  = @($res.RoutesV4  | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          Teams     = @($res.Teams     | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          DnsSuffix = @($res.DnsSuffix)
-          Listening = (if ($IncludeListening) { ($res.Listening | ConvertTo-Json -Depth 4 | ConvertFrom-Json) } else { @() })
-          Firewall  = @($res.Firewall  | ConvertTo-Json -Depth 4 | ConvertFrom-Json)
-          Notes     = $res.Notes
+          $fw = @()
+          try { $fw = Get-NetFirewallProfile -ErrorAction SilentlyContinue | Select-Object Name, Enabled } catch {}
+
+          $res = @{}
+          $res["Adapters"]  = $adapters
+          $res["IPConfig"]  = $ipcfg
+          $res["RoutesV4"]  = $routes
+          $res["DnsSuffix"] = $dnsSuffix
+          $res["Teams"]     = $teams
+          $res["Listening"] = $listening
+          $res["Firewall"]  = $fw
+          $res["Notes"]     = 'NetTCPIP(+NetLbfo)'
+
+          return $res
         }
 
+        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr -ArgumentList $IncludeListening.IsPresent
+        $out[$c] = $res
+
       } else {
-        # WMI + classic tools
+        # PS2+/no NetTCPIP → WMI + classic tools
         $scr = {
-          param($IncludeListening)
+          param($incListen)
           $cfg = Get-WmiObject -Class Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue |
                  Where-Object { $_.IPEnabled } |
                  Select-Object Description, MACAddress,
-                   @{n='IPv4';e={$_.IPAddress | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' }}},
-                   @{n='IPv6';e={$_.IPAddress | Where-Object { $_ -match ':' }}},
-                   @{n='Gateway';e={$_.DefaultIPGateway -join ','}},
-                   @{n='DNS';e={$_.DNSServerSearchOrder -join ','}},
+                   @{n='IPv4';e={ ($_.IPAddress | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' }) -join ',' }},
+                   @{n='IPv6';e={ ($_.IPAddress | Where-Object { $_ -match ':' }) -join ',' }},
+                   @{n='Gateway';e={ ($_.DefaultIPGateway) -join ',' }},
+                   @{n='DNS';e={ ($_.DNSServerSearchOrder) -join ',' }},
                    DHCPEnabled
-          $ipconfig = (& ipconfig /all) 2>$null
-          $fw       = (& netsh advfirewall show allprofiles) 2>$null
-          $routes   = (& route print -4) 2>$null
-          $listening = @()
-          if ($IncludeListening) { $listening = (& cmd /c 'netstat -ano' 2>$null) }
 
-          [pscustomobject]@{
-            IPConfig  = $cfg
-            IpconfigRaw = "$ipconfig"
-            FirewallRaw = "$fw"
-            RoutesRaw = "$routes"
-            ListeningRaw = (if ($IncludeListening) { "$listening" } else { "" })
-            Notes = 'WMI + classic tools fallback'
-          }
+          $ipconfigRaw = (& ipconfig /all) 2>$null
+          $fwRaw       = (& netsh advfirewall show allprofiles) 2>$null
+          $routesRaw   = (& route print -4) 2>$null
+          $netstatRaw  = ""
+          if ($incListen) { $netstatRaw = (& cmd.exe /c 'netstat -ano' 2>$null) }
+
+          $res = @{}
+          $res["Adapters"]   = @()      # not available here
+          $res["IPConfig"]   = $cfg
+          $res["RoutesV4"]   = @()
+          $res["Teams"]      = @()
+          $res["DnsSuffix"]  = @()
+          $res["Listening"]  = @()
+          $res["Firewall"]   = @()
+          $res["IpconfigRaw"]= "$ipconfigRaw"
+          $res["FirewallRaw"]= "$fwRaw"
+          $res["RoutesRaw"]  = "$routesRaw"
+          $res["NetstatRaw"] = "$netstatRaw"
+          $res["Notes"]      = 'WMI + classic tools'
+
+          return $res
         }
+
         $res = Invoke-Command -ComputerName $c -ScriptBlock $scr -ArgumentList $IncludeListening.IsPresent
-        $out[$c] = @{
-          Adapters   = @()
-          IPConfig   = @($res.IPConfig | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          RoutesV4   = @()
-          Teams      = @()
-          DnsSuffix  = @()
-          Listening  = @()
-          Firewall   = @()
-          IpconfigRaw= $res.IpconfigRaw
-          FirewallRaw= $res.FirewallRaw
-          RoutesRaw  = $res.RoutesRaw
-          NetstatRaw = $res.ListeningRaw
-          Notes      = $res.Notes
-        }
+        $out[$c] = $res
       }
 
     } catch {
-      Write-Log Error "Network collector failed on $c : $($_.Exception.Message)"
+      Write-Log Error ("Network collector failed on {0} : {1}" -f $c, $_.Exception.Message)
       $out[$c] = @{ Error = $_.Exception.Message }
     }
   }

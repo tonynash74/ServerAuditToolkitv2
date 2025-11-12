@@ -3,85 +3,116 @@ function Get-SATScheduledTasks {
   param(
     [string[]]$ComputerName,
     [hashtable]$Capability,
-    [int]$MaxTasksPerServer = 2000  # safety cap
+    [int]$MaxTasksPerServer = 2000
   )
 
   $out = @{}
   foreach ($c in $ComputerName) {
     try {
-      Write-Log Info "Scheduled Tasks on $c"
+      Write-Log Info ("Scheduled Tasks on {0}" -f $c)
 
-      if ($Capability.HasScheduledTasks) {
+      $useModule = ($Capability.HasScheduledTasks -and ((Get-SATPSMajor) -ge 3))
+
+      if ($useModule) {
         $scr = {
           param($Max)
-          $all = Get-ScheduledTask -ErrorAction SilentlyContinue
           $rows = @()
-          foreach ($t in $all | Select-Object -First $Max) {
+          $all = @()
+          try { $all = Get-ScheduledTask -ErrorAction SilentlyContinue } catch {}
+
+          foreach ($t in ($all | Select-Object -First $Max)) {
             $info = $null
-            try { $info = Get-ScheduledTaskInfo -TaskName $t.TaskName -TaskPath $t.TaskPath } catch {}
-            # Extract primary action command/args if present
+            try { $info = Get-ScheduledTaskInfo -TaskName $t.TaskName -TaskPath $t.TaskPath -ErrorAction SilentlyContinue } catch {}
+
             $cmd  = $null; $args = $null
             try {
               $act = $t.Actions | Select-Object -First 1
-              $cmd = $act.Execute; $args = $act.Arguments
+              if ($act) { $cmd = $act.Execute; $args = $act.Arguments }
             } catch {}
-            $rows += [pscustomobject]@{
-              TaskName   = $t.TaskName
-              TaskPath   = $t.TaskPath
-              State      = $t.State
-              Enabled    = $t.Enabled
-              UserId     = $t.Principal.UserId
-              RunLevel   = $t.Principal.RunLevel
-              ActionExe  = $cmd
-              ActionArgs = $args
-              NextRun    = $info.NextRunTime
-              LastRun    = $info.LastRunTime
-              LastResult = $info.LastTaskResult
-            }
+
+            $rows += $t | Select-Object `
+              @{n='TaskName';e={$t.TaskName}},
+              @{n='TaskPath';e={$t.TaskPath}},
+              @{n='State';e={$t.State}},
+              @{n='Enabled';e={$t.Enabled}},
+              @{n='UserId';e={$t.Principal.UserId}},
+              @{n='RunLevel';e={$t.Principal.RunLevel}},
+              @{n='ActionExe';e={$cmd}},
+              @{n='ActionArgs';e={$args}},
+              @{n='NextRun';e={$info.NextRunTime}},
+              @{n='LastRun';e={$info.LastRunTime}},
+              @{n='LastResult';e={$info.LastTaskResult}}
           }
-          [pscustomobject]@{ Tasks = $rows; Notes='ScheduledTasks module' }
-        }
-        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr -ArgumentList $MaxTasksPerServer
-        $out[$c] = @{
-          Tasks = @($res.Tasks | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          Notes = $res.Notes
+
+          $res = @{}
+          $res["Tasks"] = $rows
+          $res["Notes"] = 'ScheduledTasks module'
+          return $res
         }
 
+        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr -ArgumentList $MaxTasksPerServer
+        $out[$c] = $res
+
       } else {
+        # PS2-friendly: parse schtasks CSV (best effort; headers vary by OS locale/build)
         $scr = {
           param($Max)
           $csv = (& schtasks /Query /V /FO CSV 2>$null)
-          # Quick CSV parse (avoid culture pitfalls: rely on PowerShell CSV parser)
           $rows = @()
+
           if ($csv) {
             $parsed = $csv | ConvertFrom-Csv
-            foreach ($r in $parsed | Select-Object -First $Max) {
-              $rows += [pscustomobject]@{
-                TaskName   = $r.'TaskName'
-                TaskPath   = $r.'TaskName' -replace '^(.*\\).*','$1' # heuristic
-                State      = $r.'Status'
-                Enabled    = $r.'Scheduled Task State'
-                UserId     = $r.'Run As User'
+            $count = 0
+            foreach ($r in $parsed) {
+              if ($count -ge $Max) { break }
+              $count++
+
+              # Field name variants across versions/locales
+              $nameField   = 'TaskName'
+              $statusField = 'Status'
+              $stateField  = 'Scheduled Task State'
+              $exeField    = 'Task To Run'
+              $runAsField  = 'Run As User'
+              $nextField   = 'Next Run Time'
+              $lastField   = 'Last Run Time'
+              $resultField = 'Last Result'
+
+              $taskName = $r.$nameField
+              $taskPath = $null
+              if ($taskName) {
+                # heuristic: everything before last '\' is path
+                $idx = $taskName.LastIndexOf('\')
+                if ($idx -gt 0) { $taskPath = $taskName.Substring(0,$idx+1) }
+              }
+
+              $rows += New-Object PSObject -Property @{
+                TaskName   = $taskName
+                TaskPath   = $taskPath
+                State      = ($r.$stateField -as [string]) # may be empty
+                Enabled    = $r.$statusField
+                UserId     = $r.$runAsField
                 RunLevel   = $null
-                ActionExe  = $r.'Task To Run'
+                ActionExe  = $r.$exeField
                 ActionArgs = $null
-                NextRun    = $r.'Next Run Time'
-                LastRun    = $r.'Last Run Time'
-                LastResult = $r.'Last Result'
+                NextRun    = $r.$nextField
+                LastRun    = $r.$lastField
+                LastResult = $r.$resultField
               }
             }
           }
-          [pscustomobject]@{ Tasks=$rows; Notes='schtasks fallback' }
+
+          $res = @{}
+          $res["Tasks"] = $rows
+          $res["Notes"] = 'schtasks CSV fallback'
+          return $res
         }
+
         $res = Invoke-Command -ComputerName $c -ScriptBlock $scr -ArgumentList $MaxTasksPerServer
-        $out[$c] = @{
-          Tasks = @($res.Tasks | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          Notes = $res.Notes
-        }
+        $out[$c] = $res
       }
 
     } catch {
-      Write-Log Error "ScheduledTasks collector failed on $c : $($_.Exception.Message)"
+      Write-Log Error ("ScheduledTasks collector failed on {0} : {1}" -f $c, $_.Exception.Message)
       $out[$c] = @{ Error = $_.Exception.Message }
     }
   }

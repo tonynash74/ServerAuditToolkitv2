@@ -1,78 +1,76 @@
 function Get-SATHyperV {
   [CmdletBinding()]
-  param(
-    [string[]]$ComputerName,
-    [hashtable]$Capability
-  )
+  param([string[]]$ComputerName,[hashtable]$Capability)
 
   $out = @{}
   foreach ($c in $ComputerName) {
     try {
-      Write-Log Info "Hyper-V inventory on $c"
+      Write-Log Info ("Hyper-V inventory on {0}" -f $c)
 
-      if ($Capability.HasHyperVModule) {
+      $useModule = ($Capability.HasHyperVModule -and ((Get-SATPSMajor) -ge 3))
+
+      if ($useModule) {
         $scr = {
-          Import-Module Hyper-V -ErrorAction Stop
-          $vms = Get-VM | Select-Object Name, State, CPUUsage, MemoryAssigned, Uptime, Generation, Path, AutomaticStartAction, AutomaticStopAction
-          $nets = Get-VMNetworkAdapter -VMName * 2>$null | Select VMName, SwitchName, MacAddress, IPAddresses
-          $disks = Get-VMHardDiskDrive -VMName * 2>$null | Select VMName, Path, ControllerType, ControllerNumber, ControllerLocation
-          $switches = Get-VMSwitch | Select Name, SwitchType, AllowManagementOS
-          [pscustomobject]@{
-            VMs      = $vms
-            NICs     = $nets
-            Disks    = $disks
-            Switches = $switches
-            Notes    = 'Hyper-V module'
-          }
+          Import-Module Hyper-V -ErrorAction SilentlyContinue | Out-Null
+          $vms = @(); $nics=@(); $disks=@(); $switches=@()
+
+          try { $vms = Get-VM -ErrorAction SilentlyContinue | Select-Object Name, State, CPUUsage, MemoryAssigned, Uptime, Generation, Path, AutomaticStartAction, AutomaticStopAction } catch {}
+          try { $nics = Get-VMNetworkAdapter -VMName * -ErrorAction SilentlyContinue | Select-Object VMName, SwitchName, MacAddress, IPAddresses } catch {}
+          try { $disks = Get-VMHardDiskDrive -VMName * -ErrorAction SilentlyContinue | Select-Object VMName, Path, ControllerType, ControllerNumber, ControllerLocation } catch {}
+          try { $switches = Get-VMSwitch -ErrorAction SilentlyContinue | Select-Object Name, SwitchType, AllowManagementOS } catch {}
+
+          $res = @{}
+          $res["VMs"]      = $vms
+          $res["NICs"]     = $nics
+          $res["Disks"]    = $disks
+          $res["Switches"] = $switches
+          $res["Notes"]    = 'Hyper-V module'
+          return $res
         }
+
         $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
-        $out[$c] = @{
-          VMs      = @($res.VMs | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          NICs     = @($res.NICs | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          Disks    = @($res.Disks | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          Switches = @($res.Switches | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
-          Notes    = $res.Notes
-        }
+        $out[$c] = $res
 
       } else {
-        # WMI fallback (works on 2012 R2, namespace v2)
+        # WMI (v2 preferred; fallback to v1)
         $scr = {
           $ns = 'root\virtualization\v2'
-          try { Get-WmiObject -Namespace $ns -Class Msvm_ComputerSystem -ErrorAction Stop } catch {
-            $ns = 'root\virtualization'
-          }
-          $vms = Get-WmiObject -Namespace $ns -Class Msvm_ComputerSystem |
-                  Where-Object { $_.Caption -eq 'Virtual Machine' } |
-                  Select-Object ElementName, EnabledState, OnTimeInMilliseconds, Path
-          $maps = @{ 2='Running'; 3='Stopped'; 32768='Paused' }
-          $vmsOut = foreach ($v in $vms) {
-            [pscustomobject]@{
-              Name   = $v.ElementName
-              State  = ($maps[[int]$v.EnabledState] | ForEach-Object{$_})  # null-safe
-              Uptime = [TimeSpan]::FromMilliseconds([double]($v.OnTimeInMilliseconds))
-              Path   = $v.Path
+          $ok = $true
+          try { Get-WmiObject -Namespace $ns -Class Msvm_ComputerSystem -ErrorAction Stop | Out-Null } catch { $ok = $false }
+          if (-not $ok) { $ns = 'root\virtualization' }
+
+          $vmsOut = @()
+          try {
+            $vms = Get-WmiObject -Namespace $ns -Class Msvm_ComputerSystem -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Caption -eq 'Virtual Machine' }
+            foreach ($v in $vms) {
+              $stateMap = @{ 2='Running'; 3='Stopped'; 32768='Paused'; 32769='Suspended' }
+              $st = $null; if ($v.EnabledState -ne $null) { $st = $stateMap[[int]$v.EnabledState] }
+              $upt = $null; if ($v.OnTimeInMilliseconds) { $upt = [TimeSpan]::FromMilliseconds([double]$v.OnTimeInMilliseconds) }
+              $vmsOut += New-Object PSObject -Property @{
+                Name   = $v.ElementName
+                State  = $st
+                Uptime = $upt
+                Path   = $v.Path
+              }
             }
-          }
-          [pscustomobject]@{
-            VMs      = $vmsOut
-            NICs     = @()
-            Disks    = @()
-            Switches = @()
-            Notes    = "WMI fallback ($ns)"
-          }
+          } catch {}
+
+          $res = @{}
+          $res["VMs"]      = $vmsOut
+          $res["NICs"]     = @()
+          $res["Disks"]    = @()
+          $res["Switches"] = @()
+          $res["Notes"]    = ("WMI fallback ({0})" -f $ns)
+          return $res
         }
+
         $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
-        $out[$c] = @{
-          VMs      = @($res.VMs)
-          NICs     = @()
-          Disks    = @()
-          Switches = @()
-          Notes    = $res.Notes
-        }
+        $out[$c] = $res
       }
 
     } catch {
-      Write-Log Error "Hyper-V collector failed on $c : $($_.Exception.Message)"
+      Write-Log Error ("Hyper-V collector failed on {0} : {1}" -f $c, $_.Exception.Message)
       $out[$c] = @{ Error = $_.Exception.Message }
     }
   }

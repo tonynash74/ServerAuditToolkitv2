@@ -1,115 +1,137 @@
 function Get-SATIIS {
   [CmdletBinding()]
-  param(
-    [string[]]$ComputerName,
-    [hashtable]$Capability
-  )
+  param([string[]]$ComputerName,[hashtable]$Capability)
 
   $out = @{}
-
   foreach ($c in $ComputerName) {
     try {
-      Write-Log Info "IIS inventory on $c"
+      Write-Log Info ("IIS inventory on {0}" -f $c)
 
-      if ($Capability.HasIISModule) {
+      $useModule = $Capability.HasIISModule
+
+      if ($useModule) {
         $scr = {
-          Import-Module WebAdministration -ErrorAction Stop
-          $sites = Get-Website | ForEach-Object {
-            [pscustomobject]@{
-              Name         = $_.Name
-              Id           = $_.Id
-              State        = $_.State
-              PhysicalPath = $_.PhysicalPath
-              Bindings     = (Get-WebBinding -Name $_.Name | Select protocol, bindingInformation) 
-              AppPool      = (Get-Item "IIS:\Sites\$($_.Name)").applicationPool
+          Import-Module WebAdministration -ErrorAction SilentlyContinue | Out-Null
+
+          $sites = @()
+          try {
+            $sitesRaw = Get-Website -ErrorAction SilentlyContinue
+            foreach ($s in $sitesRaw) {
+              $bindings = @()
+              try {
+                $bnd = Get-WebBinding -Name $s.Name -ErrorAction SilentlyContinue
+                foreach ($b in $bnd) {
+                  $bindings += New-Object PSObject -Property @{
+                    protocol           = $b.protocol
+                    bindingInformation = $b.bindingInformation
+                    certificateHash    = $b.certificateHash
+                  }
+                }
+              } catch {}
+              $appPool = $null
+              try { $appPool = (Get-Item ("IIS:\Sites\{0}" -f $s.Name)).applicationPool } catch {}
+              $sites += New-Object PSObject -Property @{
+                Name         = $s.Name
+                Id           = $s.Id
+                State        = $s.State
+                PhysicalPath = $s.PhysicalPath
+                Bindings     = $bindings
+                AppPool      = $appPool
+              }
             }
-          }
-          $pools = Get-Item 'IIS:\AppPools\*' | ForEach-Object {
-            [pscustomobject]@{
-              Name                  = $_.Name
-              State                 = (Get-WebAppPoolState -Name $_.Name).Value
-              RuntimeVersion        = $_.managedRuntimeVersion
-              PipelineMode          = $_.managedPipelineMode
-              IdentityType          = $_.processModel.identityType
-              StartMode             = $_.StartMode
-              AutoStart             = $_.AutoStart
-              QueueLength           = $_.QueueLength
-              Recycling_PeriodicMin = $_.recycling.periodicRestart.time.TotalMinutes
+          } catch {}
+
+          $pools = @()
+          try {
+            $poolItems = Get-Item 'IIS:\AppPools\*' -ErrorAction SilentlyContinue
+            foreach ($p in $poolItems) {
+              $state = $null; try { $state = (Get-WebAppPoolState -Name $p.Name -ErrorAction SilentlyContinue).Value } catch {}
+              $pools += New-Object PSObject -Property @{
+                Name           = $p.Name
+                State          = $state
+                RuntimeVersion = $p.managedRuntimeVersion
+                PipelineMode   = $p.managedPipelineMode
+                IdentityType   = $p.processModel.identityType
+                StartMode      = $p.StartMode
+                AutoStart      = $p.AutoStart
+                QueueLength    = $p.QueueLength
+              }
             }
-          }
-          $certBindings = & netsh http show sslcert 2>$null
-          [pscustomobject]@{
-            Sites        = $sites
-            AppPools     = $pools
-            SslBindRaw   = $certBindings
-            Notes        = 'WebAdministration'
-          }
+          } catch {}
+
+          $ssl = (& netsh http show sslcert 2>$null)
+
+          $res = @{}
+          $res["Sites"]    = $sites
+          $res["AppPools"] = $pools
+          $res["SslBind"]  = "$ssl"
+          $res["Notes"]    = 'WebAdministration'
+          return $res
         }
+
         $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
-        # Convert PSCustomObject tree -> hashtable for speed/consistency
-        $out[$c] = @{
-          Sites    = @($res.Sites | ConvertTo-Json -Depth 6 | ConvertFrom-Json)
-          AppPools = @($res.AppPools | ConvertTo-Json -Depth 6 | ConvertFrom-Json)
-          SslBind  = "$($res.SslBindRaw)"
-          Notes    = $res.Notes
-        }
+        $out[$c] = $res
 
       } else {
-        # Fallback: appcmd XML
+        # appcmd fallback (XML parse)
         $scr = {
           $appcmd = "$env:SystemRoot\System32\inetsrv\appcmd.exe"
           if (-not (Test-Path $appcmd)) { throw "appcmd.exe not found" }
+
           $siteXml = & $appcmd list site /config /xml
           $poolXml = & $appcmd list apppool /config /xml
-          [pscustomobject]@{
-            SitesXml = $siteXml
-            PoolsXml = $poolXml
-            Notes    = 'appcmd.exe fallback'
-          }
-        }
-        $raw = Invoke-Command -ComputerName $c -ScriptBlock $scr
 
-        # Parse XML minimally (keeps PS4 happy)
-        [xml]$sx = $raw.SitesXml
-        [xml]$px = $raw.PoolsXml
+          $sites = @(); $pools = @()
+          try {
+            [xml]$sx = $siteXml
+            foreach ($s in $sx.appcmd.SITE) {
+              $binds = @()
+              foreach ($b in $s.bindings.binding) {
+                $binds += New-Object PSObject -Property @{
+                  protocol           = $b.'@PROTOCOL'
+                  bindingInformation = $b.'@BINDING.INFORMATION'
+                }
+              }
+              $sites += New-Object PSObject -Property @{
+                Name         = $s.'@NAME'
+                Id           = $s.'@ID'
+                State        = $s.'@STATE'
+                PhysicalPath = $s.'SITE.APPlications'.'APPLICATION'.'VIRTUAL.DIRECTORY'.'@PHYSICAL.PATH'
+                Bindings     = $binds
+                AppPool      = $s.'SITE.APPlications'.'APPLICATION'.'@APPPOOL'
+              }
+            }
+          } catch {}
 
-        $sites = @()
-        foreach ($s in $sx.appcmd.SITE) {
-          $sites += [pscustomobject]@{
-            Name         = $s.'@NAME'
-            Id           = $s.'@ID'
-            State        = $s.'@STATE'
-            PhysicalPath = ($s.'SITE.APPlications'.'APPLICATION'.'VIRTUAL.DIRECTORY'.'@PHYSICAL.PATH')
-            Bindings     = @($s.'bindings'.'binding' | ForEach-Object {
-                              [pscustomobject]@{ protocol = $_.'@PROTOCOL'; bindingInformation = $_.'@BINDING.INFORMATION' }
-                            })
-            AppPool      = ($s.'SITE.APPlications'.'APPLICATION'.'@APPPOOL')
-          }
-        }
-        $pools = @()
-        foreach ($p in $px.appcmd.APPPOOL) {
-          $pools += [pscustomobject]@{
-            Name           = $p.'@NAME'
-            RuntimeVersion = $p.'APPPOOL'?.managedRuntimeVersion
-            PipelineMode   = $p.'APPPOOL'?.managedPipelineMode
-            AutoStart      = $p.'APPPOOL'?.autoStart
-            StartMode      = $p.'APPPOOL'?.startMode
-          }
+          try {
+            [xml]$px = $poolXml
+            foreach ($p in $px.appcmd.APPPOOL) {
+              $pools += New-Object PSObject -Property @{
+                Name           = $p.'@NAME'
+                RuntimeVersion = $p.'APPPOOL'.managedRuntimeVersion
+                PipelineMode   = $p.'APPPOOL'.managedPipelineMode
+                AutoStart      = $p.'APPPOOL'.autoStart
+                StartMode      = $p.'APPPOOL'.startMode
+              }
+            }
+          } catch {}
+
+          $res = @{}
+          $res["Sites"]    = $sites
+          $res["AppPools"] = $pools
+          $res["SslBind"]  = ""
+          $res["Notes"]    = 'appcmd.exe fallback'
+          return $res
         }
 
-        $out[$c] = @{
-          Sites    = $sites
-          AppPools = $pools
-          SslBind  = ''
-          Notes    = 'appcmd.exe fallback (parsed)'
-        }
+        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
+        $out[$c] = $res
       }
 
     } catch {
-      Write-Log Error "IIS collector failed on $c : $($_.Exception.Message)"
+      Write-Log Error ("IIS collector failed on {0} : {1}" -f $c, $_.Exception.Message)
       $out[$c] = @{ Error = $_.Exception.Message }
     }
   }
-
   return $out
 }
