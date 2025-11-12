@@ -1,27 +1,29 @@
 ﻿@{
-  ModuleToProcess   = 'ServerAuditToolkitV2.psm1' 
-  ModuleVersion     = '0.2.0'
-  GUID              = 'b3ae2b02-3a86-4b5f-9e5b-1c8ee4c4f1ab'
-  Author            = 'tonynash74'
-  CompanyName       = ''
-  PowerShellVersion = '2.0'
-  FunctionsToExport = '*'
-  AliasesToExport   = @()
-  CmdletsToExport   = @()
-  Description       = 'Server audit + migration-readiness toolkit (PS2+ compatible)'
+    # PS2-safe manifest (no RootModule/CompatiblePSEditions)
+    ModuleToProcess   = 'ServerAuditToolkitV2.psm1'
 
-  FunctionsToExport = @(
-    'Invoke-ServerAudit',
-    'Get-SATSystem','Get-SATRolesFeatures','Get-SATNetwork','Get-SATStorage',
-    'Get-SATADDS','Get-SATDNS','Get-SATDHCP','Get-SATIIS','Get-SATHyperV',
-    'Get-SATSMB','Get-SATPrinters','Get-SATCertificates','Get-SATScheduledTasks','Get-SATLocalAccounts'
-  )
+    GUID              = 'f0b6f1a2-2a1f-4a6f-9b7e-8b6c2a4d22b9'
+    Author            = 'ServerAuditToolkitV2 Team'
+    CompanyName       = 'ServerAuditToolkit'
+    Copyright         = '(c) ServerAuditToolkit. All rights reserved.'
+    ModuleVersion     = '1.0.0.0'
+    Description       = 'Windows Server audit toolkit to produce migration readiness datasets and a client-ready HTML report. PS2+ compatible.'
+    PowerShellVersion = '2.0'
 
-  PrivateData = @{
-    PSData = @{
-      Tags       = @('Windows','Audit','Migration','Server')
-      LicenseUri = 'https://opensource.org/licenses/MIT'
-      ProjectUri = 'https://github.com/tonynash74/ServerAuditToolkitv2'
-    }
-  }
+    # Keep these empty for maximum compatibility
+    RequiredModules       = @()
+    RequiredAssemblies    = @()
+    ScriptsToProcess      = @()
+    TypesToProcess        = @()
+    FormatsToProcess      = @()
+    FileList              = @()
+    ModuleList            = @()
+
+    # Export everything; simpler than maintaining a long list across PS2/PS5
+    FunctionsToExport = '*'
+    CmdletsToExport   = @()
+    VariablesToExport = @()
+    AliasesToExport   = @()
+
+    PrivateData = @{}
 }
