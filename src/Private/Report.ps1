@@ -330,6 +330,11 @@ function New-SATReport {
   if ($csvUsers)    { $quickLinks += "<li><a href='./csv/local_users.csv'>Local Users CSV</a></li>" }
   if ($csvGroups)   { $quickLinks += "<li><a href='./csv/local_groups.csv'>Local Groups CSV</a></li>" }
   if ($csvMembers)  { $quickLinks += "<li><a href='./csv/local_group_members.csv'>Local Group Members CSV</a></li>" }
+$quickLinks += "<li><a href='./csv/data_shares.csv'>Data Discovery: Shares CSV</a></li>"
+$quickLinks += "<li><a href='./csv/data_folders.csv'>Data Discovery: Folders CSV</a></li>"
+$quickLinks += "<li><a href='./csv/data_filetypes.csv'>Data Discovery: Filetypes CSV</a></li>"
+$quickLinks += "<li><a href='./report_data_$Timestamp.html'>Data Discovery Report</a></li>"
+
 
   # ---------- HTML ----------
   $html = @"
