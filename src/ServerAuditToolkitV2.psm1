@@ -63,6 +63,11 @@ function Invoke-ServerAudit {
   }
   return $results
 }
+# Persist dataset using compat exporter (JSON if possible, else CLIXML)
+$global:SAT_LastTimestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+$base = Join-Path $OutDir ("data_{0}" -f $global:SAT_LastTimestamp)
+$null = Export-SATData -Object $results -PathBase $base -Depth 6
+
 # Build Migration Units
 $units = New-SATMigrationUnits -Data $results
 
