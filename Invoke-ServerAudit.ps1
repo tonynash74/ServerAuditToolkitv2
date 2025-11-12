@@ -16,7 +16,7 @@ $ScriptRoot = if ($PSVersionTable.PSVersion.Major -ge 3 -and $PSScriptRoot) {
 
 # Find the module manifest from common locations (root, src, parent\src) or by search
 $manifestCandidates = @(
-  Join-Path $ScriptRoot 'ServerAuditToolkitV2.psd1'),
+  (Join-Path $ScriptRoot 'ServerAuditToolkitV2.psd1'),
   (Join-Path $ScriptRoot 'src\ServerAuditToolkitV2.psd1'),
   (Join-Path (Split-Path -Parent $ScriptRoot) 'src\ServerAuditToolkitV2.psd1')
 ) + (Get-ChildItem -Path $ScriptRoot -Filter 'ServerAuditToolkitV2.psd1' -Recurse -ErrorAction SilentlyContinue |
