@@ -38,7 +38,6 @@ function New-SATReport {
     foreach ($srv in @($Data['Get-SATIIS'].Keys)) {
       $iis = $Data['Get-SATIIS'][$srv]
       foreach ($s in @($iis.Sites)) {
-        # flatten bindings to "proto|bindInfo;..."
         $btxt = @()
         foreach ($b in @($s.Bindings)) { $btxt += ("{0}|{1}" -f $b.protocol, $b.bindingInformation) }
         $iisSitesRows += New-Object PSObject -Property @{
@@ -54,8 +53,8 @@ function New-SATReport {
       }
     }
   }
-  $csvIisSites = if($iisSitesRows){ Write-SATCsv -OutDir $csvRoot -Name 'iis_sites' -Rows $iisSitesRows }
-  $csvIisPools = if($iisPoolsRows){ Write-SATCsv -OutDir $csvRoot -Name 'iis_pools' -Rows $iisPoolsRows }
+  $csvIisSites = $null; if($iisSitesRows){ $csvIisSites = Write-SATCsv -OutDir $csvRoot -Name 'iis_sites' -Rows $iisSitesRows }
+  $csvIisPools = $null; if($iisPoolsRows){ $csvIisPools = Write-SATCsv -OutDir $csvRoot -Name 'iis_pools' -Rows $iisPoolsRows }
   if ($iisSitesRows -and $iisSitesRows.Count -gt 0) { $findingsMsgs += ("IIS migration required on {0} server(s): {1} site(s)." -f @(@($Data['Get-SATIIS'].Keys).Count), $iisSitesRows.Count) }
 
   # ---------- Hyper-V ----------
@@ -69,7 +68,7 @@ function New-SATReport {
       }
     }
   }
-  $csvHyperV = if($hvVmRows){ Write-SATCsv -OutDir $csvRoot -Name 'hyperv_vms' -Rows $hvVmRows }
+  $csvHyperV = $null; if($hvVmRows){ $csvHyperV = Write-SATCsv -OutDir $csvRoot -Name 'hyperv_vms' -Rows $hvVmRows }
   if ($hvVmRows -and $hvVmRows.Count -gt 0) { $findingsMsgs += ("Hyper-V migration required on {0} host(s): {1} VM(s)." -f @(@($Data['Get-SATHyperV'].Keys).Count), $hvVmRows.Count) }
 
   # ---------- DHCP/DNS counts ----------
@@ -102,8 +101,8 @@ function New-SATReport {
       }
     }
   }
-  $csvSmbShares = if($smbShareRows){ Write-SATCsv -OutDir $csvRoot -Name 'smb_shares' -Rows $smbShareRows }
-  $csvSmbAcls   = if($smbAclRows){   Write-SATCsv -OutDir $csvRoot -Name 'smb_ntfs_top' -Rows $smbAclRows }
+  $csvSmbShares = $null; if($smbShareRows){ $csvSmbShares = Write-SATCsv -OutDir $csvRoot -Name 'smb_shares' -Rows $smbShareRows }
+  $csvSmbAcls   = $null; if($smbAclRows){   $csvSmbAcls   = Write-SATCsv -OutDir $csvRoot -Name 'smb_ntfs_top' -Rows $smbAclRows }
   if ($smbShareRows -and $smbShareRows.Count -gt 0) { $findingsMsgs += ("File server migration required: {0} share(s) across {1} server(s)." -f $smbShareRows.Count, @(@($Data['Get-SATSMB'].Keys).Count)) }
 
   # ---------- Certificates ----------
@@ -121,7 +120,7 @@ function New-SATReport {
       }
     }
   }
-  $csvCerts = if($certRows){ Write-SATCsv -OutDir $csvRoot -Name 'certificates' -Rows $certRows }
+  $csvCerts = $null; if($certRows){ $csvCerts = Write-SATCsv -OutDir $csvRoot -Name 'certificates' -Rows $certRows }
   if ($certRows -and $certRows.Count -gt 0) {
     $expiring = (@($certRows | Where-Object { $_.NotAfter -and ([datetime]$_.NotAfter -lt (Get-Date).AddDays(120)) })).Count
     $findingsMsgs += ("Certificates discovered: {0}. Expiring in <120 days: {1}." -f $certRows.Count, $expiring)
@@ -141,7 +140,6 @@ function New-SATReport {
   if ($Data -and $Data['Get-SATNetwork']) {
     foreach ($srv in @($Data['Get-SATNetwork'].Keys)) {
       $n = $Data['Get-SATNetwork'][$srv]
-      # Build a map of adapters by Name (if present)
       $adapters = @{}
       foreach ($a in @($n.Adapters)) {
         $name = $null
@@ -157,7 +155,6 @@ function New-SATReport {
         $akey = $null; if ($alias) { $akey = $alias.ToLower() }
         $a = $null; if ($akey -and $adapters.ContainsKey($akey)) { $a = $adapters[$akey] }
 
-        # IPv4
         $ipv4list = @()
         if ($cfg -and $cfg.PSObject.Properties['IPv4Address']) {
           foreach ($i in @($cfg.IPv4Address)) {
@@ -167,7 +164,6 @@ function New-SATReport {
           $ipv4list += @($cfg.IPv4)
         }
 
-        # IPv6
         $ipv6list = @()
         if ($cfg -and $cfg.PSObject.Properties['IPv6Address']) {
           foreach ($i6 in @($cfg.IPv6Address)) {
@@ -177,14 +173,12 @@ function New-SATReport {
           $ipv6list += @($cfg.IPv6)
         }
 
-        # Gateway
         $gw = $null
         if ($cfg -and $cfg.PSObject.Properties['Ipv4DefaultGateway']) {
           $gobj = $cfg.Ipv4DefaultGateway
           if ($gobj -and $gobj.PSObject -and $gobj.PSObject.Properties['NextHop']) { $gw = $gobj.NextHop }
         }
 
-        # DNS
         $dnslist = @()
         if ($cfg -and $cfg.PSObject.Properties['DNSServer']) {
           foreach ($d in @($cfg.DNSServer)) {
@@ -213,7 +207,7 @@ function New-SATReport {
       }
     }
   }
-  $csvNetwork = if($netRows){ Write-SATCsv -OutDir $csvRoot -Name 'network_adapters' -Rows $netRows }
+  $csvNetwork = $null; if($netRows){ $csvNetwork = Write-SATCsv -OutDir $csvRoot -Name 'network_adapters' -Rows $netRows }
 
   # ---------- Storage ----------
   $volRows = @(); $diskRows=@()
@@ -237,8 +231,8 @@ function New-SATReport {
       }
     }
   }
-  $csvVolumes = if($volRows){ Write-SATCsv -OutDir $csvRoot -Name 'storage_volumes' -Rows $volRows }
-  $csvDisks   = if($diskRows){ Write-SATCsv -OutDir $csvRoot -Name 'storage_disks'   -Rows $diskRows }
+  $csvVolumes = $null; if($volRows){ $csvVolumes = Write-SATCsv -OutDir $csvRoot -Name 'storage_volumes' -Rows $volRows }
+  $csvDisks   = $null; if($diskRows){ $csvDisks   = Write-SATCsv -OutDir $csvRoot -Name 'storage_disks'   -Rows $diskRows }
 
   # ---------- Local Accounts ----------
   $userRows=@(); $groupRows=@(); $memberRows=@()
@@ -258,9 +252,9 @@ function New-SATReport {
       }
     }
   }
-  $csvUsers   = if($userRows){   Write-SATCsv -OutDir $csvRoot -Name 'local_users'         -Rows $userRows }
-  $csvGroups  = if($groupRows){  Write-SATCsv -OutDir $csvRoot -Name 'local_groups'        -Rows $groupRows }
-  $csvMembers = if($memberRows){ Write-SATCsv -OutDir $csvRoot -Name 'local_group_members' -Rows $memberRows }
+  $csvUsers   = $null; if($userRows){   $csvUsers   = Write-SATCsv -OutDir $csvRoot -Name 'local_users'         -Rows $userRows }
+  $csvGroups  = $null; if($groupRows){  $csvGroups  = Write-SATCsv -OutDir $csvRoot -Name 'local_groups'        -Rows $groupRows }
+  $csvMembers = $null; if($memberRows){ $csvMembers = Write-SATCsv -OutDir $csvRoot -Name 'local_group_members' -Rows $memberRows }
 
   # ---------- Printers ----------
   $printerRows=@(); $portRows=@()
@@ -287,48 +281,50 @@ function New-SATReport {
       }
     }
   }
-  $csvPrinters = if($printerRows){ Write-SATCsv -OutDir $csvRoot -Name 'printers' -Rows $printerRows }
-  $csvPorts    = if($portRows){    Write-SATCsv -OutDir $csvRoot -Name 'printer_ports' -Rows $portRows }
+  $csvPrinters = $null; if($printerRows){ $csvPrinters = Write-SATCsv -OutDir $csvRoot -Name 'printers' -Rows $printerRows }
+  $csvPorts    = $null; if($portRows){    $csvPorts    = Write-SATCsv -OutDir $csvRoot -Name 'printer_ports' -Rows $portRows }
 
   # ---------- Migration Units / Findings CSV links ----------
-  $csvUnits = $null; $csvFinds=$null
-  if ($Units)  { $csvUnits = Write-SATCsv -OutDir $csvRoot -Name 'migration_units' -Rows ($Units | Select Id,Kind,Server,Name,Summary,Confidence) }
-  if ($Findings){ $csvFinds = Write-SATCsv -OutDir $csvRoot -Name 'readiness_findings' -Rows ($Findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId) }
+  $csvUnits = $null;  if ($Units)   { $csvUnits = Write-SATCsv -OutDir $csvRoot -Name 'migration_units' -Rows ($Units | Select Id,Kind,Server,Name,Summary,Confidence) }
+  $csvFinds = $null;  if ($Findings){ $csvFinds = Write-SATCsv -OutDir $csvRoot -Name 'readiness_findings' -Rows ($Findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId) }
 
-  # Confidence buckets
-$hi=0; $md=0; $lo=0
-if ($Units) {
-  foreach ($u in $Units) {
-    if ($u.Confidence -ge 0.9) { $hi++ }
-    elseif ($u.Confidence -ge 0.7) { $md++ }
-    else { $lo++ }
+  # Confidence buckets (PS2-safe)
+  $hi=0; $md=0; $lo=0
+  if ($Units) {
+    foreach ($u in $Units) {
+      if ($u.Confidence -ge 0.9) { $hi++ }
+      elseif ($u.Confidence -ge 0.7) { $md++ }
+      else { $lo++ }
+    }
   }
-}
-$unitCount = 0
-if ($Units) { $unitCount = $Units.Count }
-$totalUnits = [math]::Max(1, $unitCount)
-$hiPct = [math]::Round(($hi*100.0)/$totalUnits,1)
-$mdPct = [math]::Round(($md*100.0)/$totalUnits,1)
-$loPct = [math]::Round(($lo*100.0)/$totalUnits,1)
+  $unitCount = 0
+  if ($Units) { $unitCount = $Units.Count }
+  $totalUnits = [math]::Max(1, $unitCount)
+  $hiPct = [math]::Round(($hi*100.0)/$totalUnits,1)
+  $mdPct = [math]::Round(($md*100.0)/$totalUnits,1)
+  $loPct = [math]::Round(($lo*100.0)/$totalUnits,1)
+
+  # Build quick-links HTML once (avoid inline if inside heredoc)
+  $quickLinks = ""
+  if ($csvUnits)    { $quickLinks += "<li><a href='./csv/migration_units.csv'>Migration Units CSV</a></li>" }
+  if ($csvFinds)    { $quickLinks += "<li><a href='./csv/readiness_findings.csv'>Readiness Findings CSV</a></li>" }
+  if ($csvIisSites) { $quickLinks += "<li><a href='./csv/iis_sites.csv'>IIS Sites CSV</a></li>" }
+  if ($csvIisPools) { $quickLinks += "<li><a href='./csv/iis_pools.csv'>IIS AppPools CSV</a></li>" }
+  if ($csvHyperV)   { $quickLinks += "<li><a href='./csv/hyperv_vms.csv'>Hyper-V VMs CSV</a></li>" }
+  if ($csvSmbShares){ $quickLinks += "<li><a href='./csv/smb_shares.csv'>SMB Shares CSV</a></li>" }
+  if ($csvSmbAcls)  { $quickLinks += "<li><a href='./csv/smb_ntfs_top.csv'>Top-level NTFS ACL CSV</a></li>" }
+  if ($csvCerts)    { $quickLinks += "<li><a href='./csv/certificates.csv'>Certificates CSV</a></li>" }
+  if ($csvNetwork)  { $quickLinks += "<li><a href='./csv/network_adapters.csv'>Network Adapters + IPs CSV</a></li>" }
+  if ($csvVolumes)  { $quickLinks += "<li><a href='./csv/storage_volumes.csv'>Storage Volumes CSV</a></li>" }
+  if ($csvDisks)    { $quickLinks += "<li><a href='./csv/storage_disks.csv'>Storage Disks CSV</a></li>" }
+  if ($csvUsers)    { $quickLinks += "<li><a href='./csv/local_users.csv'>Local Users CSV</a></li>" }
+  if ($csvGroups)   { $quickLinks += "<li><a href='./csv/local_groups.csv'>Local Groups CSV</a></li>" }
+  if ($csvMembers)  { $quickLinks += "<li><a href='./csv/local_group_members.csv'>Local Group Members CSV</a></li>" }
 
   # ---------- Markdown summary ----------
   $summary = @"
 # ServerAuditToolkitV2 Migration Readiness
 Run: $Timestamp
-
-## High-level findings
-$(($findingsMsgs | ForEach-Object { "* $_" }) -join "`n")
-
-## Inventory footprint
-- Servers: $($servers.Count)
-- IIS: Sites=$($iisSitesRows.Count); AppPools=$($iisPoolsRows.Count)
-- Hyper-V: VMs=$($hvVmRows.Count)
-- SMB: Shares=$($smbShareRows.Count)
-- Certs: $($certRows.Count)
-- Volumes: $($volRows.Count); Disks: $($diskRows.Count)
-- Local Users: $($userRows.Count); Groups: $($groupRows.Count)
-- Printers: $($printerRows.Count)
-- Migration Units: $(if($Units){$Units.Count}else{0}) (Confidence: ${hiPct}% high, ${mdPct}% medium, ${loPct}% low)
 "@
   $md = Join-Path $OutDir "summary_$Timestamp.md"
   $summary | Set-Content -Path $md -Encoding UTF8
@@ -361,29 +357,14 @@ $(($findingsMsgs | ForEach-Object { "* $_" }) -join "`n")
         <ul class="mb-0">
           <li>Servers: $($servers.Count)</li>
           <li>Printers: $($printerRows.Count)</li>
-          <li>Migration Units: $(if($Units){$Units.Count}else{0})</li>
+          <li>Migration Units: $unitCount</li>
         </ul>
       </div></div>
     </div>
     <div class="col-md-7">
       <div class="card shadow-sm"><div class="card-body">
         <h5 class="card-title">Quick links</h5>
-        <ul>
-          $(if($csvUnits){ "<li><a href='./csv/migration_units.csv'>Migration Units CSV</a></li>" })
-          $(if($csvFinds){ "<li><a href='./csv/readiness_findings.csv'>Readiness Findings CSV</a></li>" })
-          $(if($csvIisSites){ "<li><a href='./csv/iis_sites.csv'>IIS Sites CSV</a></li>" })
-          $(if($csvIisPools){ "<li><a href='./csv/iis_pools.csv'>IIS AppPools CSV</a></li>" })
-          $(if($csvHyperV){ "<li><a href='./csv/hyperv_vms.csv'>Hyper-V VMs CSV</a></li>" })
-          $(if($csvSmbShares){ "<li><a href='./csv/smb_shares.csv'>SMB Shares CSV</a></li>" })
-          $(if($csvSmbAcls){ "<li><a href='./csv/smb_ntfs_top.csv'>Top-level NTFS ACL CSV</a></li>" })
-          $(if($csvCerts){ "<li><a href='./csv/certificates.csv'>Certificates CSV</a></li>" })
-          $(if($csvNetwork){ "<li><a href='./csv/network_adapters.csv'>Network Adapters + IPs CSV</a></li>" })
-          $(if($csvVolumes){ "<li><a href='./csv/storage_volumes.csv'>Storage Volumes CSV</a></li>" })
-          $(if($csvDisks){ "<li><a href='./csv/storage_disks.csv'>Storage Disks CSV</a></li>" })
-          $(if($csvUsers){ "<li><a href='./csv/local_users.csv'>Local Users CSV</a></li>" })
-          $(if($csvGroups){ "<li><a href='./csv/local_groups.csv'>Local Groups CSV</a></li>" })
-          $(if($csvMembers){ "<li><a href='./csv/local_group_members.csv'>Local Group Members CSV</a></li>" })
-        </ul>
+        <ul>$quickLinks</ul>
       </div></div>
     </div>
   </div>
