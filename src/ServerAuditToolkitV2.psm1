@@ -7,6 +7,7 @@
 . "$PSScriptRoot\Private\Parallel.ps1"
 . "$PSScriptRoot\Private\Migration.ps1"
 . "$PSScriptRoot\Private\Report.ps1"
+. "$PSScriptRoot\Private\Report.Data.ps1"
 
 # ---- Load all collectors ----
 $collectorsPath = Join-Path $PSScriptRoot 'Collectors'
@@ -69,7 +70,7 @@ function Invoke-ServerAudit {
     'Get-SATSystem','Get-SATRolesFeatures','Get-SATNetwork','Get-SATStorage',
     'Get-SATADDS','Get-SATDNS','Get-SATDHCP','Get-SATSMB',
     'Get-SATIIS','Get-SATHyperV','Get-SATCertificates','Get-SATScheduledTasks',
-    'Get-SATLocalAccounts','Get-SATPrinters'
+    'Get-SATLocalAccounts','Get-SATPrinters','Get-SATDataDiscovery'
   )
 
   $results = @{}
@@ -112,6 +113,7 @@ function Invoke-ServerAudit {
   if ($findings) { $findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId     | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $csvDir 'readiness_findings.csv') }
 
   # ---- HTML Report ----
+  $null = New-SATDataDiscoveryReport -Data $results -OutDir $OutDir -Timestamp $ts
   $null = New-SATReport -Data $results -Units $units -Findings $findings -OutDir $OutDir -Timestamp $ts
 
   return $results
