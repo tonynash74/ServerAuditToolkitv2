@@ -1,4 +1,5 @@
 # Load private helpers
+. $PSScriptRoot\Private\Compat.ps1
 . $PSScriptRoot\Private\Logging.ps1
 . $PSScriptRoot\Private\Parallel.ps1
 . $PSScriptRoot\Private\Capability.ps1
