@@ -5,13 +5,19 @@ function Get-SATPSMajor {
 
 # --- [pscustomobject] shim for PS2 ---
 function New-SATObject {
-  param([hashtable]$Properties)
-  if ((Get-SATPSMajor) -ge 3) { return [pscustomobject]$Properties }
-  $o = New-Object PSObject
-  foreach ($k in $Properties.Keys) {
-    Add-Member -InputObject $o -NotePropertyName $k -NotePropertyValue $Properties[$k]
-  }
-  return $o
+    param(
+        [hashtable]$Properties
+    )
+
+    if ((Get-SATPSMajor) -ge 3) {
+        return [pscustomobject]$Properties
+    }
+
+    $o = New-Object PSObject
+    foreach ($k in $Properties.Keys) {
+        Add-Member -InputObject $o -NotePropertyName $k -NotePropertyValue ($Properties[$k])
+    }
+    return $o
 }
 
 # --- safe module presence check ---
