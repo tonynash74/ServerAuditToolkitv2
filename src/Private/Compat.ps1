@@ -1,4 +1,10 @@
-﻿# --- PS version helpers ---
+﻿<#
+Compat.ps1 - Compatibility helpers for ServerAuditToolkitV2
+
+This file provides small PS-version and compatibility shims.
+#>
+
+# --- PS version helpers ---
 function Get-SATPSMajor {
   if ($PSVersionTable) { return $PSVersionTable.PSVersion.Major } else { return 2 }
 }
@@ -15,28 +21,30 @@ function New-SATObject {
 
     $o = New-Object PSObject
     foreach ($k in $Properties.Keys) {
-        Add-Member -InputObject $o -NotePropertyName $k -NotePropertyValue ($Properties[$k])
+        $null = Add-Member -InputObject $o -NotePropertyName $k -NotePropertyValue ($Properties[$k])
     }
     return $o
 }
 
 # --- safe module presence check ---
-function Test-SATModule { param([string]$Name)
-  return [bool](Get-Module -ListAvailable -Name $Name -ErrorAction SilentlyContinue)
+function Test-SATModule {
+    param([string]$Name)
+    return [bool](Get-Module -ListAvailable -Name $Name -ErrorAction SilentlyContinue)
 }
 
 # --- safe service status ---
-function Get-SATServiceStatus { param([string]$Name)
-  $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
-  if ($svc) { $svc.Status } else { $null }
+function Get-SATServiceStatus {
+    param([string]$Name)
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($svc) { return $svc.Status } else { return $null }
 }
 
 # --- JSON/CLIXML exporter (PS3+ JSON, else CLIXML) ---
 function Export-SATData {
   param(
-    [Parameter(Mandatory=$true)]$Object,
-    [Parameter(Mandatory=$true)][string]$PathBase,
-    [int]$Depth = 6
+    [Parameter(Mandatory=$true)] $Object,
+    [Parameter(Mandatory=$true)][string] $PathBase,
+    [int] $Depth = 6
   )
   $jsonCmd = Get-Command ConvertTo-Json -ErrorAction SilentlyContinue
   if ($jsonCmd) {
