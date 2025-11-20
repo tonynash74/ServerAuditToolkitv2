@@ -215,6 +215,40 @@ function Invoke-ServerAudit {
   return $results
 }
 
+<<<<<<< Updated upstream
+=======
+# filepath: c:\.GitLocal\ServerAuditToolkitv2\src\ServerAuditToolkitV2.psm1
+# Import core functions
+. $PSScriptRoot\core\Get-CollectorMetadata.ps1
+. $PSScriptRoot\core\Get-ServerCapabilities.ps1
+. $PSScriptRoot\core\Invoke-ServerAudit.ps1
+# ... existing imports ...
+
+# Ensure all functions are exported
+Export-ModuleMember -Function @(
+    # T1: Collector Framework
+    'Invoke-ServerAudit'
+    'Get-CollectorMetadata'
+    'Get-CompatibleCollectors'
+    'Get-CompatibleCollectorsByOS'
+    'Get-CollectorVariant'
+    'Test-CollectorDependencies'
+    'Get-WindowsVersionFromBuild'
+    'Get-CollectorSummary'
+    
+    # T2: Performance Profiler
+    'Get-ServerCapabilities'
+    'Get-ProcessorInfo'
+    'Get-RAMInfo'
+    'Get-DiskPerformance'
+    'Test-NetworkConnectivity'
+    'Get-SystemLoad'
+    'Calculate-ParallelismBudget'
+    
+    # ... existing exports ...
+)
+
+>>>>>>> Stashed changes
 # ---------- Export ----------
 $exports = @('Invoke-ServerAudit','Write-SATCsv','New-SATReport','Get-SATCapability')
 $exports += (Get-Command -CommandType Function | Where-Object { $_.Name -like 'Get-SAT*' } | Select-Object -ExpandProperty Name)
