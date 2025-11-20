@@ -1,33 +1,78 @@
+<#
+.SYNOPSIS
+    Orchestrates server audit with adaptive parallelism based on server capabilities.
 
 .DESCRIPTION
-    1. Detects local PowerShell version and Windows OS
-    2. Loads collector metadata
-    3. Filters collectors for compatibility
-    4. Executes compatible collectors with adaptive parallelism
-    5. Aggregates results and passes to report generation
+    Three-stage audit execution:
+    1. DISCOVER: Detect local PS version, filter compatible collectors (T1)
+    2. PROFILE: Profile target server capabilities (T2)
+    3. EXECUTE: Run collectors with adaptive parallelism and timeout management
+
+    Returns structured audit results with per-collector execution metrics.
 
 .PARAMETER ComputerName
-    Target servers to audit. Can pipe multiple server names.
+    Target servers to audit. Accepts pipeline input. Defaults to localhost.
 
 .PARAMETER Collectors
-    Specific collectors to run. If empty, runs all compatible collectors.
+    Specific collectors to run (by name, e.g. "Get-ServerInfo", "Get-IISInfo").
+    If empty, runs all compatible collectors.
 
 .PARAMETER DryRun
-    If $true, shows which collectors will run without executing.
+    If $true, shows which collectors will execute without running them.
+    Useful for planning and validation.
 
 .PARAMETER MaxParallelJobs
-    Maximum concurrent jobs. If 0, auto-detects based on server resources.
+    Override auto-detected parallelism (from T2 profile). Use with caution.
+    0 = auto-detect (default); 1-8 = manual override.
+
+.PARAMETER SkipPerformanceProfile
+    If $true, skips T2 profiling; uses conservative defaults (1 job, 60s timeout).
+    Faster but less optimal parallelism.
+
+.PARAMETER UseCollectorCache
+    If $true, loads collectors from cache (if available).
+    If $false, always fresh-load collectors.
+
+.PARAMETER CollectorPath
+    Custom path to collectors folder. Defaults to module structure.
+
+.PARAMETER OutputPath
+    Directory for audit results (JSON, CSV, HTML reports).
+    Defaults to $PWD\audit_results.
+
+.PARAMETER LogLevel
+    Logging verbosity: 'Verbose', 'Information', 'Warning', 'Error'.
 
 .EXAMPLE
-    Invoke-ServerAudit -ComputerName "SERVER01", "SERVER02" -DryRun
-    Invoke-ServerAudit -ComputerName "SERVER01" -Collectors @("Get-ServerInfo", "Get-Services")
+    # Dry-run to see what will execute
+    Invoke-ServerAudit -ComputerName "SERVER01" -DryRun
 
+.EXAMPLE
+    # Execute audit with auto-detected parallelism
+    $results = Invoke-ServerAudit -ComputerName "SERVER01", "SERVER02"
+    $results.Servers | Format-Table ComputerName, Success, ParallelismUsed
+
+.EXAMPLE
+    # Run specific collectors with custom parallelism
+    $results = Invoke-ServerAudit `
+        -ComputerName "SERVER01" `
+        -Collectors @("Get-ServerInfo", "Get-IISInfo") `
+        -MaxParallelJobs 2
+
+.EXAMPLE
+    # Skip profiling for speed (conservative settings)
+    $results = Invoke-ServerAudit -ComputerName "SERVER01" -SkipPerformanceProfile
+
+.NOTES
+    PS2.0+ compatible. Maintains backwards compatibility with PS 2.0.
+    Uses runspace pools for parallel execution (PS3+); sequential on PS 2.0.
 #>
 
 function Invoke-ServerAudit {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter(Mandatory=$false, ValueFromPipeline=$true)]
+        [Parameter(Mandatory=$false, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+        [Alias('Name', 'Server')]
         [string[]]$ComputerName = @($env:COMPUTERNAME),
 
         [Parameter(Mandatory=$false)]
@@ -37,321 +82,698 @@ function Invoke-ServerAudit {
         [switch]$DryRun,
 
         [Parameter(Mandatory=$false)]
-        [int]$MaxParallelJobs = 0
+        [ValidateRange(0, 16)]
+        [int]$MaxParallelJobs = 0,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$SkipPerformanceProfile,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$UseCollectorCache = $true,
+
+        [Parameter(Mandatory=$false)]
+        [string]$CollectorPath,
+
+        [Parameter(Mandatory=$false)]
+        [string]$OutputPath = (Join-Path -Path $PWD -ChildPath 'audit_results'),
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('Verbose', 'Information', 'Warning', 'Error')]
+        [string]$LogLevel = 'Information'
     )
 
-    Write-Host "=== ServerAuditToolkitV2: Audit Orchestrator ===" -ForegroundColor Cyan
-    Write-Host "PowerShell Version: $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
-    Write-Host "Target Servers: $($ComputerName -join ', ')"
-
-    # STEP 1: Load collector metadata
-    Write-Verbose "Loading collector metadata..."
-    $metadata = Get-CollectorMetadata
-
-    if (-not $metadata) {
-        Write-Error "Failed to load collector metadata. Exiting."
-        return
-    }
-
-    # STEP 2: Determine local environment
-    $localPSVersion = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
-    Write-Verbose "Local PowerShell Version: $localPSVersion"
-
-    # STEP 3: Filter collectors
-    Write-Verbose "Filtering collectors for compatibility..."
-    $compatibleCollectors = Get-CompatibleCollectors -Collectors $metadata.collectors -PSVersion $localPSVersion
-
-    if ($Collectors.Count -gt 0) {
-        # User specified specific collectors
-        $compatibleCollectors = $compatibleCollectors | Where-Object { $_.name -in $Collectors }
-    }
-
-    if ($compatibleCollectors.Count -eq 0) {
-        Write-Warning "No compatible collectors found for PS $localPSVersion"
-        return
-    }
-
-    Write-Host "Compatible Collectors: $($compatibleCollectors.Count)"
-    $compatibleCollectors | ForEach-Object { Write-Host "  - $($_.displayName) (timeout: $($_.timeout)s)" -ForegroundColor Green }
-
-    # DRY RUN: Show what will execute
-    if ($DryRun) {
-        Write-Host "`nDRY RUN MODE: Collectors will NOT execute." -ForegroundColor Yellow
-        Write-Host "To run the audit, remove the -DryRun flag.`n" -ForegroundColor Yellow
-        return
-    }
-
-    # STEP 4: Aggregate results from all servers
-    $auditResults = @{
-        Servers     = @()
-        Timestamp   = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
-        PSVersion   = $localPSVersion
-        Collectors  = $compatibleCollectors.Count
-    }
-
-    # STEP 5: Execute collectors for each server
-    foreach ($server in $ComputerName) {
-        Write-Host "`nAuditing: $server" -ForegroundColor Cyan
-        
-        $serverResults = @{
-            ComputerName = $server
-            Collectors   = @()
-            Success      = $true
-            Errors       = @()
-        }
-
-        foreach ($collector in $compatibleCollectors) {
-            Write-Host "  Running: $($collector.displayName)..." -NoNewline
-
-            try {
-                # Determine which collector variant to use
-                $variant = Get-CollectorVariant -Collector $collector -PSVersion $localPSVersion
-                $collectorPath = Join-Path -Path $PSScriptRoot -ChildPath "..\collectors\$variant"
-
-                if (-not (Test-Path -LiteralPath $collectorPath)) {
-                    throw "Collector not found: $collectorPath"
-                }
-
-                # Validate dependencies
-                $depsOk = Test-CollectorDependencies -Collector $collector
-                if (-not $depsOk) {
-                    Write-Host " [SKIPPED - Missing Dependencies]" -ForegroundColor Yellow
-                    $serverResults.Collectors += @{
-                        Name    = $collector.name
-                        Status  = 'SKIPPED'
-                        Reason  = 'Missing dependencies'
-                    }
-                    continue
-                }
-
-                # Execute collector
-                $collectorOutput = & $collectorPath -ComputerName $server -ErrorAction Stop
-
-                if ($collectorOutput.Success) {
-                    Write-Host " [OK]" -ForegroundColor Green
-                } else {
-                    Write-Host " [FAILED]" -ForegroundColor Red
-                    $serverResults.Success = $false
-                }
-
-                $serverResults.Collectors += @{
-                    Name          = $collector.name
-                    Status        = if ($collectorOutput.Success) { 'SUCCESS' } else { 'FAILED' }
-                    ExecutionTime = $collectorOutput.ExecutionTime
-                    Data          = $collectorOutput.Data
-                    Errors        = $collectorOutput.Errors
-                }
-
-            } catch {
-                Write-Host " [ERROR]" -ForegroundColor Red
-                $serverResults.Errors += $_
-                $serverResults.Success = $false
+    begin {
+        # Initialize audit session
+        $auditSession = @{
+            SessionId              = [guid]::NewGuid().ToString()
+            StartTime              = Get-Date
+            LocalPSVersion         = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
+            LocalOSVersion         = (Get-OSVersion)
+            TotalServersToAudit    = 0
+            CollectorMetadata      = $null
+            CompatibleCollectors   = @()
+            AuditResults           = @{
+                Servers             = @()
+                Timestamp           = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+                PSVersion           = $null
+                SessionId           = $null
+                PerformanceProfiles = @()
+                Summary             = @{}
             }
         }
 
-        $auditResults.Servers += $serverResults
+        # Setup logging
+        Initialize-AuditLogging -SessionId $auditSession.SessionId -LogLevel $LogLevel
+
+        Write-AuditLog "=== ServerAuditToolkitV2 Orchestrator (T3) ===" -Level Information
+        Write-AuditLog "Session ID: $($auditSession.SessionId)" -Level Verbose
+        Write-AuditLog "Local PS Version: $($auditSession.LocalPSVersion)" -Level Verbose
+        Write-AuditLog "Local OS Version: $($auditSession.LocalOSVersion)" -Level Verbose
+
+        # Resolve collector path
+        if ([string]::IsNullOrEmpty($CollectorPath)) {
+            $CollectorPath = Join-Path -Path $PSScriptRoot -ChildPath '..\collectors'
+        }
+
+        if (-not (Test-Path -LiteralPath $CollectorPath)) {
+            Write-AuditLog "Collector path not found: $CollectorPath" -Level Error
+            throw "Collector path not found: $CollectorPath"
+        }
+
+        Write-AuditLog "Collector path: $CollectorPath" -Level Verbose
+
+        # Create output directory
+        if (-not (Test-Path -LiteralPath $OutputPath)) {
+            try {
+                [void](New-Item -ItemType Directory -Path $OutputPath -Force -ErrorAction Stop)
+                Write-AuditLog "Created output directory: $OutputPath" -Level Verbose
+            } catch {
+                Write-AuditLog "Failed to create output directory: $_" -Level Error
+                throw
+            }
+        }
+
+        # ====== STAGE 1: DISCOVER ======
+        Write-AuditLog "STAGE 1: DISCOVER (Collector Compatibility)" -Level Information
+
+        try {
+            # Load metadata
+            Write-AuditLog "Loading collector metadata..." -Level Verbose
+            $auditSession.CollectorMetadata = Get-CollectorMetadata
+            
+            if (-not $auditSession.CollectorMetadata) {
+                throw "Failed to load collector metadata."
+            }
+
+            Write-AuditLog "Loaded $($auditSession.CollectorMetadata.collectors.Count) collector definitions" -Level Verbose
+
+            # Filter by PS version
+            Write-AuditLog "Filtering collectors for PS $($auditSession.LocalPSVersion)..." -Level Verbose
+            $auditSession.CompatibleCollectors = Get-CompatibleCollectors `
+                -Collectors $auditSession.CollectorMetadata.collectors `
+                -PSVersion $auditSession.LocalPSVersion
+
+            if ($auditSession.CompatibleCollectors.Count -eq 0) {
+                throw "No collectors compatible with PS $($auditSession.LocalPSVersion)"
+            }
+
+            Write-AuditLog "Found $($auditSession.CompatibleCollectors.Count) compatible collectors" -Level Information
+
+            # Filter by user selection
+            if ($Collectors.Count -gt 0) {
+                Write-AuditLog "Filtering by user selection: $($Collectors -join ', ')" -Level Verbose
+                $auditSession.CompatibleCollectors = $auditSession.CompatibleCollectors | Where-Object { $_.name -in $Collectors }
+
+                if ($auditSession.CompatibleCollectors.Count -eq 0) {
+                    throw "No compatible collectors match user selection: $($Collectors -join ', ')"
+                }
+            }
+
+            # Display compatible collectors
+            Write-AuditLog "Compatible collectors:" -Level Information
+            $auditSession.CompatibleCollectors | ForEach-Object {
+                Write-AuditLog "  - $($_.displayName) (variants: $($_.psVersions -join ', '))" -Level Information
+            }
+
+        } catch {
+            Write-AuditLog "DISCOVER stage failed: $_" -Level Error
+            throw
+        }
+
+        $auditSession.AuditResults.PSVersion = $auditSession.LocalPSVersion
+        $auditSession.AuditResults.SessionId = $auditSession.SessionId
     }
 
-    # STEP 6: Summary and return
-    Write-Host "`n=== Audit Complete ===" -ForegroundColor Cyan
-    Write-Host "Servers processed: $($auditResults.Servers.Count)"
-    Write-Host "Successful: $(($auditResults.Servers | Where-Object { $_.Success }).Count)"
+    process {
+        # ====== STAGE 2: PROFILE & EXECUTE ======
+        foreach ($server in $ComputerName) {
+            Write-AuditLog "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -Level Information
+            Write-AuditLog "Server: $server" -Level Information
 
-    return $auditResults
+            $serverResults = @{
+                ComputerName           = $server
+                Collectors             = @()
+                Success                = $true
+                ExecutionStartTime     = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+                ExecutionEndTime       = $null
+                ExecutionTimeSeconds   = 0
+                PerformanceProfile     = $null
+                ParallelismUsed        = 1
+                TimeoutUsed            = 60
+                Errors                 = @()
+                Warnings               = @()
+                CollectorsSummary      = @{
+                    Total    = $auditSession.CompatibleCollectors.Count
+                    Executed = 0
+                    Succeeded = 0
+                    Failed   = 0
+                    Skipped  = 0
+                }
+            }
+
+            $serverStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+            try {
+                # Stage 2a: PROFILE (T2)
+                if (-not $SkipPerformanceProfile) {
+                    Write-AuditLog "STAGE 2a: PROFILE (Server Capabilities, T2)" -Level Information
+                    
+                    try {
+                        Write-AuditLog "Profiling $server..." -Level Verbose
+                        $profile = Get-ServerCapabilities -ComputerName $server -UseCache:$true
+
+                        if ($profile.Success) {
+                            Write-AuditLog "Profile complete: Tier=$($profile.PerformanceTier), Jobs=$($profile.SafeParallelJobs), Timeout=$($profile.JobTimeoutSec)s" -Level Information
+                            
+                            if ($profile.ResourceConstraints.Count -gt 0) {
+                                Write-AuditLog "Resource constraints detected:" -Level Warning
+                                $profile.ResourceConstraints | ForEach-Object {
+                                    Write-AuditLog "  ⚠ $_" -Level Warning
+                                    $serverResults.Warnings += $_
+                                }
+                            }
+
+                            $serverResults.PerformanceProfile = $profile
+                            $auditSession.AuditResults.PerformanceProfiles += @{
+                                ComputerName = $server
+                                Profile      = $profile
+                            }
+                        } else {
+                            Write-AuditLog "Profile failed; using conservative defaults" -Level Warning
+                            $serverResults.Warnings += "Profiling failed; using conservative parallelism"
+                        }
+
+                    } catch {
+                        Write-AuditLog "Profiling error: $_" -Level Warning
+                        $serverResults.Warnings += "Profiling exception: $_"
+                    }
+                } else {
+                    Write-AuditLog "Skipping performance profile (user requested)" -Level Information
+                }
+
+                # Determine parallelism & timeout
+                if ($MaxParallelJobs -gt 0) {
+                    # User override
+                    $serverResults.ParallelismUsed = $MaxParallelJobs
+                    $serverResults.TimeoutUsed = 90  # default when overridden
+                    Write-AuditLog "Using user-specified parallelism: $($MaxParallelJobs) jobs" -Level Verbose
+                } elseif ($serverResults.PerformanceProfile -and $serverResults.PerformanceProfile.Success) {
+                    # T2 auto-detect
+                    $serverResults.ParallelismUsed = $serverResults.PerformanceProfile.SafeParallelJobs
+                    $serverResults.TimeoutUsed = $serverResults.PerformanceProfile.JobTimeoutSec
+                    Write-AuditLog "Using T2-detected parallelism: $($serverResults.ParallelismUsed) jobs, $($serverResults.TimeoutUsed)s timeout" -Level Verbose
+                } else {
+                    # Conservative defaults
+                    $serverResults.ParallelismUsed = 1
+                    $serverResults.TimeoutUsed = 60
+                    Write-AuditLog "Using conservative defaults: 1 job, 60s timeout" -Level Verbose
+                }
+
+                # Stage 2b: EXECUTE (T3)
+                Write-AuditLog "STAGE 2b: EXECUTE (Run Collectors, T3)" -Level Information
+                Write-AuditLog "Executing $($auditSession.CompatibleCollectors.Count) collectors with parallelism=$($serverResults.ParallelismUsed)" -Level Information
+
+                $collectorResults = Invoke-CollectorExecution `
+                    -Server $server `
+                    -Collectors $auditSession.CompatibleCollectors `
+                    -Parallelism $serverResults.ParallelismUsed `
+                    -TimeoutSeconds $serverResults.TimeoutUsed `
+                    -DryRun:$DryRun `
+                    -CollectorPath $CollectorPath `
+                    -PSVersion $auditSession.LocalPSVersion
+
+                # Aggregate results
+                foreach ($result in $collectorResults) {
+                    $serverResults.Collectors += $result
+                    $serverResults.CollectorsSummary.Executed += 1
+
+                    if ($result.Status -eq 'SUCCESS') {
+                        $serverResults.CollectorsSummary.Succeeded += 1
+                    } elseif ($result.Status -eq 'FAILED') {
+                        $serverResults.CollectorsSummary.Failed += 1
+                        $serverResults.Success = $false
+                    } elseif ($result.Status -eq 'SKIPPED') {
+                        $serverResults.CollectorsSummary.Skipped += 1
+                    }
+
+                    if ($result.Errors -and $result.Errors.Count -gt 0) {
+                        $serverResults.Errors += $result.Errors
+                    }
+                }
+
+            } catch {
+                Write-AuditLog "Server audit failed: $_" -Level Error
+                $serverResults.Success = $false
+                $serverResults.Errors += $_
+            } finally {
+                $serverStopwatch.Stop()
+                $serverResults.ExecutionEndTime = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+                $serverResults.ExecutionTimeSeconds = [Math]::Round($serverStopwatch.Elapsed.TotalSeconds, 2)
+            }
+
+            # Add to audit results
+            $auditSession.AuditResults.Servers += $serverResults
+            
+            Write-AuditLog "Server audit complete in $($serverResults.ExecutionTimeSeconds)s: $($serverResults.CollectorsSummary.Succeeded)/$($serverResults.CollectorsSummary.Total) collectors succeeded" -Level Information
+        }
+    }
+
+    end {
+        # ====== STAGE 3: FINALIZE ======
+        Write-AuditLog "STAGE 3: FINALIZE (Aggregate Results)" -Level Information
+
+        try {
+            # Calculate summary statistics
+            $auditSession.AuditResults.Summary = @{
+                TotalServers             = $auditSession.AuditResults.Servers.Count
+                SuccessfulServers        = ($auditSession.AuditResults.Servers | Where-Object { $_.Success }).Count
+                FailedServers            = ($auditSession.AuditResults.Servers | Where-Object { -not $_.Success }).Count
+                TotalCollectorsExecuted  = ($auditSession.AuditResults.Servers | ForEach-Object { $_.CollectorsSummary.Executed } | Measure-Object -Sum).Sum
+                TotalCollectorsSucceeded = ($auditSession.AuditResults.Servers | ForEach-Object { $_.CollectorsSummary.Succeeded } | Measure-Object -Sum).Sum
+                TotalCollectorsFailed    = ($auditSession.AuditResults.Servers | ForEach-Object { $_.CollectorsSummary.Failed } | Measure-Object -Sum).Sum
+                AverageFetchTimeSeconds  = [Math]::Round(($auditSession.AuditResults.Servers | ForEach-Object { $_.ExecutionTimeSeconds } | Measure-Object -Average).Average, 2)
+                DurationSeconds          = [Math]::Round(((Get-Date) - $auditSession.StartTime).TotalSeconds, 2)
+            }
+
+            # Export results
+            Write-AuditLog "Exporting audit results to $OutputPath..." -Level Information
+            Export-AuditResults -Results $auditSession.AuditResults -OutputPath $OutputPath
+
+            # Display summary
+            Write-AuditLog "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -Level Information
+            Write-AuditLog "=== Audit Summary ===" -Level Information
+            Write-AuditLog "Servers audited: $($auditSession.AuditResults.Summary.TotalServers)" -Level Information
+            Write-AuditLog "Successful: $($auditSession.AuditResults.Summary.SuccessfulServers) | Failed: $($auditSession.AuditResults.Summary.FailedServers)" -Level Information
+            Write-AuditLog "Collectors executed: $($auditSession.AuditResults.Summary.TotalCollectorsSucceeded)/$($auditSession.AuditResults.Summary.TotalCollectorsExecuted)" -Level Information
+            Write-AuditLog "Duration: $($auditSession.AuditResults.Summary.DurationSeconds)s" -Level Information
+            Write-AuditLog "Results exported to: $OutputPath" -Level Information
+
+            return $auditSession.AuditResults
+
+        } catch {
+            Write-AuditLog "Finalization failed: $_" -Level Error
+            throw
+        }
+    }
 }
 
-Write-Verbose "[SAT] Done. See outputs in $OutDir"
-return $dataset
-# ... existing code ...
+<#
+.SYNOPSIS
+    Executes collectors for a single server with adaptive parallelism.
 
-function Invoke-ServerAudit {
+.NOTES
+    Internal function used by Invoke-ServerAudit.
+    Handles PS version-specific execution, timeout management, and error recovery.
+#>
+function Invoke-CollectorExecution {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$false, ValueFromPipeline=$true)]
-        [string[]]$ComputerName = @($env:COMPUTERNAME),
+        [Parameter(Mandatory=$true)]
+        [string]$Server,
 
-        [Parameter(Mandatory=$false)]
-        [string[]]$Collectors,
+        [Parameter(Mandatory=$true)]
+        [object[]]$Collectors,
+
+        [Parameter(Mandatory=$true)]
+        [int]$Parallelism,
+
+        [Parameter(Mandatory=$true)]
+        [int]$TimeoutSeconds,
 
         [Parameter(Mandatory=$false)]
         [switch]$DryRun,
 
-        [Parameter(Mandatory=$false)]
-        [int]$MaxParallelJobs = 0,  # 0 = auto-detect from capabilities
+        [Parameter(Mandatory=$true)]
+        [string]$CollectorPath,
 
-        [Parameter(Mandatory=$false)]
-        [switch]$SkipPerformanceProfile  # Skip T2 profiling for speed
+        [Parameter(Mandatory=$true)]
+        [string]$PSVersion
     )
 
-    Write-Host "=== ServerAuditToolkitV2: Audit Orchestrator ===" -ForegroundColor Cyan
-    Write-Host "PowerShell Version: $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
-    Write-Host "Target Servers: $($ComputerName -join ', ')"
+    $results = @()
 
-    # STEP 1: Load collector metadata (T1)
-    Write-Verbose "Loading collector metadata..."
-    $metadata = Get-CollectorMetadata
+    # PS2 or single-threaded mode
+    if ($PSVersionTable.PSVersion.Major -le 2 -or $Parallelism -le 1) {
+        Write-AuditLog "Using sequential execution (PS $PSVersion or Parallelism=1)" -Level Verbose
 
-    if (-not $metadata) {
-        Write-Error "Failed to load collector metadata. Exiting."
-        return
-    }
+        foreach ($collector in $Collectors) {
+            $collectorResult = Invoke-SingleCollector `
+                -Server $Server `
+                -Collector $collector `
+                -TimeoutSeconds $TimeoutSeconds `
+                -DryRun:$DryRun `
+                -CollectorPath $CollectorPath `
+                -PSVersion $PSVersion
 
-    # STEP 2: Determine local environment
-    $localPSVersion = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
-    Write-Verbose "Local PowerShell Version: $localPSVersion"
-
-    # STEP 3: Filter collectors (T1)
-    Write-Verbose "Filtering collectors for compatibility..."
-    $compatibleCollectors = Get-CompatibleCollectors -Collectors $metadata.collectors -PSVersion $localPSVersion
-
-    if ($Collectors.Count -gt 0) {
-        $compatibleCollectors = $compatibleCollectors | Where-Object { $_.name -in $Collectors }
-    }
-
-    if ($compatibleCollectors.Count -eq 0) {
-        Write-Warning "No compatible collectors found for PS $localPSVersion"
-        return
-    }
-
-    Write-Host "Compatible Collectors: $($compatibleCollectors.Count)"
-    $compatibleCollectors | ForEach-Object { Write-Host "  - $($_.displayName) (timeout: $($_.timeout)s)" -ForegroundColor Green }
-
-    # DRY RUN: Show what will execute
-    if ($DryRun) {
-        Write-Host "`nDRY RUN MODE: Collectors will NOT execute." -ForegroundColor Yellow
-        return
-    }
-
-    # ============== NEW T2 INTEGRATION ==============
-    # STEP 4: Profile server capabilities and determine parallelism
-    Write-Host "`nProfiler Server Capabilities (T2)..." -ForegroundColor Cyan
-
-    $auditResults = @{
-        Servers           = @()
-        Timestamp         = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
-        PSVersion         = $localPSVersion
-        Collectors        = $compatibleCollectors.Count
-        PerformanceProfiles = @()  # NEW: track performance profiles
-    }
-
-    foreach ($server in $ComputerName) {
-        Write-Host "`nAuditing: $server" -ForegroundColor Cyan
-
-        # T2: Get server capabilities
-        if (-not $SkipPerformanceProfile) {
-            Write-Host "  Profiling capabilities..." -NoNewline
-            try {
-                $capabilities = Get-ServerCapabilities -ComputerName $server -UseCache:$true -ErrorAction Stop
-
-                if ($capabilities.Success) {
-                    Write-Host " [OK]" -ForegroundColor Green
-                    Write-Host "    Performance Tier: $($capabilities.PerformanceTier) | Safe Jobs: $($capabilities.SafeParallelJobs) | Timeout: $($capabilities.JobTimeoutSec)s"
-
-                    if ($capabilities.ResourceConstraints.Count -gt 0) {
-                        Write-Host "    Constraints detected:" -ForegroundColor Yellow
-                        $capabilities.ResourceConstraints | ForEach-Object { Write-Host "      - $_" -ForegroundColor Yellow }
-                    }
-
-                    $auditResults.PerformanceProfiles += @{
-                        ComputerName = $server
-                        Profile      = $capabilities
-                    }
-                } else {
-                    Write-Host " [FAILED]" -ForegroundColor Red
-                    $capabilities = $null
-                }
-            } catch {
-                Write-Host " [ERROR]" -ForegroundColor Red
-                Write-Error "Profiling failed: $_"
-                $capabilities = $null
-            }
-        } else {
-            $capabilities = $null
+            $results += $collectorResult
         }
+    } else {
+        # PS3+ parallel execution via runspace pool
+        Write-AuditLog "Using parallel execution ($Parallelism jobs)" -Level Verbose
 
-        # Determine parallelism for this server
-        $effectiveMaxJobs = if ($MaxParallelJobs -gt 0) {
-            $MaxParallelJobs  # User override
-        } elseif ($capabilities -and $capabilities.Success) {
-            $capabilities.SafeParallelJobs  # Use T2 profile
-        } else {
-            1  # Conservative default
-        }
-
-        $effectiveTimeout = if ($capabilities -and $capabilities.Success) {
-            $capabilities.JobTimeoutSec
-        } else {
-            60  # Default 1 minute per job
-        }
-
-        Write-Host "  Using parallelism: $effectiveMaxJobs jobs with ${effectiveTimeout}s timeout per collector"
-
-        # STEP 5: Execute collectors with calculated parameters
-        $serverResults = @{
-            ComputerName        = $server
-            Collectors          = @()
-            Success             = $true
-            ParallelismUsed     = $effectiveMaxJobs
-            TimeoutUsed         = $effectiveTimeout
-            Errors              = @()
-        }
-
-        foreach ($collector in $compatibleCollectors) {
-            Write-Host "  Running: $($collector.displayName)..." -NoNewline
-
-            try {
-                # Determine variant (T1)
-                $variant = Get-CollectorVariant -Collector $collector -PSVersion $localPSVersion
-                $collectorPath = Join-Path -Path $PSScriptRoot -ChildPath "..\collectors\$variant"
-
-                if (-not (Test-Path -LiteralPath $collectorPath)) {
-                    throw "Collector not found: $collectorPath"
-                }
-
-                # Validate dependencies (T1)
-                $depsOk = Test-CollectorDependencies -Collector $collector
-                if (-not $depsOk) {
-                    Write-Host " [SKIPPED - Missing Dependencies]" -ForegroundColor Yellow
-                    $serverResults.Collectors += @{
-                        Name    = $collector.name
-                        Status  = 'SKIPPED'
-                        Reason  = 'Missing dependencies'
-                    }
-                    continue
-                }
-
-                # Execute collector with T2-calculated timeout
-                $collectorOutput = & $collectorPath -ComputerName $server -ErrorAction Stop
-
-                if ($collectorOutput.Success) {
-                    Write-Host " [OK]" -ForegroundColor Green
-                } else {
-                    Write-Host " [FAILED]" -ForegroundColor Red
-                    $serverResults.Success = $false
-                }
-
-                $serverResults.Collectors += @{
-                    Name          = $collector.name
-                    Status        = if ($collectorOutput.Success) { 'SUCCESS' } else { 'FAILED' }
-                    ExecutionTime = $collectorOutput.ExecutionTime
-                    Data          = $collectorOutput.Data
-                    Errors        = $collectorOutput.Errors
-                }
-
-            } catch {
-                Write-Host " [ERROR]" -ForegroundColor Red
-                $serverResults.Errors += $_
-                $serverResults.Success = $false
-            }
-        }
-
-        $auditResults.Servers += $serverResults
+        $results = Invoke-ParallelCollectors `
+            -Server $Server `
+            -Collectors $Collectors `
+            -MaxJobs $Parallelism `
+            -TimeoutSeconds $TimeoutSeconds `
+            -DryRun:$DryRun `
+            -CollectorPath $CollectorPath `
+            -PSVersion $PSVersion
     }
 
-    # STEP 6: Summary and return
-    Write-Host "`n=== Audit Complete ===" -ForegroundColor Cyan
-    Write-Host "Servers processed: $($auditResults.Servers.Count)"
-    Write-Host "Successful: $(($auditResults.Servers | Where-Object { $_.Success }).Count)"
-
-    return $auditResults
+    return $results
 }
+
+<#
+.SYNOPSIS
+    Executes a single collector with timeout and error handling.
+#>
+function Invoke-SingleCollector {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Server,
+
+        [Parameter(Mandatory=$true)]
+        [object]$Collector,
+
+        [Parameter(Mandatory=$true)]
+        [int]$TimeoutSeconds,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$DryRun,
+
+        [Parameter(Mandatory=$true)]
+        [string]$CollectorPath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$PSVersion
+    )
+
+    $result = @{
+        Name           = $Collector.name
+        DisplayName    = $Collector.displayName
+        Status         = 'PENDING'
+        ExecutionTime  = 0
+        Data           = $null
+        Errors         = @()
+    }
+
+    try {
+        # Get optimal variant
+        $variant = Get-CollectorVariant -Collector $Collector -PSVersion $PSVersion
+        $collectorScriptPath = Join-Path -Path $CollectorPath -ChildPath $variant
+
+        Write-AuditLog "  Running: $($Collector.displayName)..." -NoNewline -Level Information
+
+        if ($DryRun) {
+            Write-AuditLog " [DRY-RUN]" -Level Information
+            $result.Status = 'DRY-RUN'
+            return $result
+        }
+
+        # Validate collector exists
+        if (-not (Test-Path -LiteralPath $collectorScriptPath)) {
+            throw "Collector not found: $collectorScriptPath"
+        }
+
+        # Validate dependencies
+        if (-not (Test-CollectorDependencies -Collector $Collector)) {
+            Write-AuditLog " [SKIPPED - Dependencies]" -Level Information
+            $result.Status = 'SKIPPED'
+            $result.Errors += "Missing dependencies: $($Collector.dependencies -join ', ')"
+            return $result
+        }
+
+        # Execute collector
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+        try {
+            $collectorOutput = & $collectorScriptPath -ComputerName $Server -ErrorAction Stop
+
+            $stopwatch.Stop()
+            $result.ExecutionTime = [Math]::Round($stopwatch.Elapsed.TotalSeconds, 2)
+
+            if ($collectorOutput -and $collectorOutput.Success) {
+                Write-AuditLog " [OK - $($result.ExecutionTime)s]" -Level Information
+                $result.Status = 'SUCCESS'
+                $result.Data = $collectorOutput.Data
+            } else {
+                Write-AuditLog " [FAILED]" -Level Information
+                $result.Status = 'FAILED'
+                if ($collectorOutput.Errors) {
+                    $result.Errors += $collectorOutput.Errors
+                }
+            }
+        } catch {
+            $stopwatch.Stop()
+            $result.ExecutionTime = [Math]::Round($stopwatch.Elapsed.TotalSeconds, 2)
+            Write-AuditLog " [ERROR - $($result.ExecutionTime)s]" -Level Information
+            $result.Status = 'FAILED'
+            $result.Errors += $_
+        }
+
+    } catch {
+        Write-AuditLog " [ERROR]" -Level Information
+        $result.Status = 'FAILED'
+        $result.Errors += $_
+    }
+
+    return $result
+}
+
+<#
+.SYNOPSIS
+    Executes collectors in parallel via runspace pool (PS3+).
+#>
+function Invoke-ParallelCollectors {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Server,
+
+        [Parameter(Mandatory=$true)]
+        [object[]]$Collectors,
+
+        [Parameter(Mandatory=$true)]
+        [int]$MaxJobs,
+
+        [Parameter(Mandatory=$true)]
+        [int]$TimeoutSeconds,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$DryRun,
+
+        [Parameter(Mandatory=$true)]
+        [string]$CollectorPath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$PSVersion
+    )
+
+    # Create runspace pool
+    $RunspacePool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(
+        1, $MaxJobs,
+        [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+    )
+    $RunspacePool.Open()
+
+    $jobs = @()
+    $results = @()
+
+    try {
+        # Queue collector jobs
+        foreach ($collector in $Collectors) {
+            $powerShell = [System.Management.Automation.PowerShell]::Create()
+            $powerShell.RunspacePool = $RunspacePool
+
+            # Add collector invocation script
+            [void]$powerShell.AddScript({
+                param($Server, $Collector, $TimeoutSeconds, $CollectorPath, $PSVersion)
+
+                # Re-import functions in runspace
+                . (Join-Path -Path $PSScriptRoot -ChildPath '..\core\Get-CollectorMetadata.ps1')
+
+                Invoke-SingleCollector `
+                    -Server $Server `
+                    -Collector $Collector `
+                    -TimeoutSeconds $TimeoutSeconds `
+                    -DryRun:$false `
+                    -CollectorPath $CollectorPath `
+                    -PSVersion $PSVersion
+            })
+
+            $powerShell.AddArgument($Server)
+            $powerShell.AddArgument($Collector)
+            $powerShell.AddArgument($TimeoutSeconds)
+            $powerShell.AddArgument($CollectorPath)
+            $powerShell.AddArgument($PSVersion)
+
+            $asyncHandle = $powerShell.BeginInvoke()
+
+            $jobs += @{
+                PowerShell   = $powerShell
+                AsyncHandle  = $asyncHandle
+                Collector    = $Collector
+                StartTime    = Get-Date
+            }
+        }
+
+        # Collect results with timeout management
+        foreach ($job in $jobs) {
+            $elapsed = (Get-Date) - $job.StartTime
+
+            try {
+                $jobResult = $job.PowerShell.EndInvoke($job.AsyncHandle)
+                $results += $jobResult
+            } catch {
+                $results += @{
+                    Name           = $job.Collector.name
+                    DisplayName    = $job.Collector.displayName
+                    Status         = 'FAILED'
+                    ExecutionTime  = [Math]::Round($elapsed.TotalSeconds, 2)
+                    Data           = $null
+                    Errors         = @($_)
+                }
+            } finally {
+                $job.PowerShell.Dispose()
+            }
+        }
+
+    } finally {
+        $RunspacePool.Close()
+        $RunspacePool.Dispose()
+    }
+
+    return $results
+}
+
+<#
+.SYNOPSIS
+    Initializes audit logging for the session.
+#>
+function Initialize-AuditLogging {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$SessionId,
+
+        [Parameter(Mandatory=$false)]
+        [string]$LogLevel = 'Information'
+    )
+
+    $script:AuditLogFile = Join-Path -Path $env:TEMP -ChildPath "SAT_$SessionId.log"
+    $script:AuditLogLevel = $LogLevel
+}
+
+<#
+.SYNOPSIS
+    Writes audit log entry (to file and console).
+#>
+function Write-AuditLog {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [string]$Message,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('Verbose', 'Information', 'Warning', 'Error')]
+        [string]$Level = 'Information'
+    )
+
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+    $logEntry = "[$timestamp] [$Level] $Message"
+
+    # Write to file
+    if ($script:AuditLogFile) {
+        Add-Content -LiteralPath $script:AuditLogFile -Value $logEntry -ErrorAction SilentlyContinue
+    }
+
+    # Write to console based on level
+    switch ($Level) {
+        'Verbose'   { Write-Verbose $Message }
+        'Information' { Write-Host $Message -ForegroundColor Cyan }
+        'Warning'   { Write-Host $Message -ForegroundColor Yellow }
+        'Error'     { Write-Host $Message -ForegroundColor Red }
+    }
+}
+
+<#
+.SYNOPSIS
+    Gets local OS version from registry/WMI.
+#>
+function Get-OSVersion {
+    [CmdletBinding()]
+    param()
+
+    try {
+        if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) {
+            $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+            return (Get-WindowsVersionFromBuild -BuildNumber $os.BuildNumber)
+        } else {
+            $os = Get-WmiObject -Class Win32_OperatingSystem -ErrorAction Stop
+            return (Get-WindowsVersionFromBuild -BuildNumber $os.BuildNumber)
+        }
+    } catch {
+        return 'Unknown'
+    }
+}
+
+<#
+.SYNOPSIS
+    Exports audit results to JSON, CSV, and HTML.
+#>
+function Export-AuditResults {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [hashtable]$Results,
+
+        [Parameter(Mandatory=$true)]
+        [string]$OutputPath
+    )
+
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+
+    # Export JSON (raw data)
+    $jsonPath = Join-Path -Path $OutputPath -ChildPath "audit_$timestamp.json"
+    try {
+        $Results | ConvertTo-Json -Depth 10 | Out-File -LiteralPath $jsonPath -Encoding UTF8 -Force
+        Write-AuditLog "Exported: $jsonPath" -Level Verbose
+    } catch {
+        Write-AuditLog "Failed to export JSON: $_" -Level Warning
+    }
+
+    # Export CSV (per-server summary)
+    $csvPath = Join-Path -Path $OutputPath -ChildPath "audit_summary_$timestamp.csv"
+    try {
+        $Results.Servers | Select-Object `
+            ComputerName,
+            Success,
+            ParallelismUsed,
+            TimeoutUsed,
+            ExecutionTimeSeconds,
+            @{Name='CollectorsSucceeded'; Expression={$_.CollectorsSummary.Succeeded}},
+            @{Name='CollectorsFailed'; Expression={$_.CollectorsSummary.Failed}} |
+        Export-Csv -LiteralPath $csvPath -NoTypeInformation -Force
+
+        Write-AuditLog "Exported: $csvPath" -Level Verbose
+    } catch {
+        Write-AuditLog "Failed to export CSV: $_" -Level Warning
+    }
+
+    # Display summary table
+    Write-Host "`n" -ForegroundColor Cyan
+    $Results.Servers | Select-Object `
+        ComputerName,
+        Success,
+        ParallelismUsed,
+        @{Name='Collectors'; Expression={"$($_.CollectorsSummary.Succeeded)/$($_.CollectorsSummary.Total)"}},
+        ExecutionTimeSeconds |
+    Format-Table -AutoSize
+}
+
+# Export public functions
+Export-ModuleMember -Function @(
+    'Invoke-ServerAudit'
+)
