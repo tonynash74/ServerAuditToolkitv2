@@ -215,14 +215,16 @@ function Invoke-ServerAudit {
   return $results
 }
 
+# filepath: c:\.GitLocal\ServerAuditToolkitv2\src\ServerAuditToolkitV2.psm1
 # Import core functions
 . $PSScriptRoot\core\Get-CollectorMetadata.ps1
+. $PSScriptRoot\core\Get-ServerCapabilities.ps1
 . $PSScriptRoot\core\Invoke-ServerAudit.ps1
 # ... existing imports ...
 
 # Ensure all functions are exported
 Export-ModuleMember -Function @(
-    # Core
+    # T1: Collector Framework
     'Invoke-ServerAudit'
     'Get-CollectorMetadata'
     'Get-CompatibleCollectors'
@@ -231,11 +233,18 @@ Export-ModuleMember -Function @(
     'Test-CollectorDependencies'
     'Get-WindowsVersionFromBuild'
     'Get-CollectorSummary'
+    
+    # T2: Performance Profiler
+    'Get-ServerCapabilities'
+    'Get-ProcessorInfo'
+    'Get-RAMInfo'
+    'Get-DiskPerformance'
+    'Test-NetworkConnectivity'
+    'Get-SystemLoad'
+    'Calculate-ParallelismBudget'
+    
     # ... existing exports ...
 )
-
-
-
 
 # ---------- Export ----------
 #$exports = @('Invoke-ServerAudit','Write-SATCsv','New-SATReport','Get-SATCapability')
