@@ -215,8 +215,6 @@ function Invoke-ServerAudit {
   return $results
 }
 
-<<<<<<< Updated upstream
-=======
 # filepath: c:\.GitLocal\ServerAuditToolkitv2\src\ServerAuditToolkitV2.psm1
 # Import core functions
 . $PSScriptRoot\core\Get-CollectorMetadata.ps1
@@ -248,9 +246,9 @@ Export-ModuleMember -Function @(
     # ... existing exports ...
 )
 
->>>>>>> Stashed changes
 # ---------- Export ----------
-$exports = @('Invoke-ServerAudit','Write-SATCsv','New-SATReport','Get-SATCapability')
-$exports += (Get-Command -CommandType Function | Where-Object { $_.Name -like 'Get-SAT*' } | Select-Object -ExpandProperty Name)
-$exports = $exports | Sort-Object -Unique
-Export-ModuleMember -Function $exports
+#$exports = @('Invoke-ServerAudit','Write-SATCsv','New-SATReport','Get-SATCapability')
+#$exports += (Get-Command -CommandType Function | Where-Object { $_.Name -like 'Get-SAT*' } | Select-Object -ExpandProperty Name)
+#$exports = $exports | Sort-Object -Unique
+#Export-ModuleMember -Function $exports 
+#

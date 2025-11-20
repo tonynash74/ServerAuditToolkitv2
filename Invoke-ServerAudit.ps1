@@ -1,65 +1,167 @@
-<<<<<<< Updated upstream
-[CmdletBinding(SupportsShouldProcess=$false)]
-param(
-  [string[]]$ComputerName = $env:COMPUTERNAME,
-  [string]  $OutDir,
-  [switch]  $NoParallel
-)
 
-# Robust script root (works even if $PSScriptRoot is null)
-$ScriptRoot = if ($PSVersionTable.PSVersion.Major -ge 3 -and $PSScriptRoot) {
-  $PSScriptRoot
-} elseif ($MyInvocation.MyCommand.Path) {
-  Split-Path -Parent $MyInvocation.MyCommand.Path
-} else {
-  (Get-Location).Path
-}
+.DESCRIPTION
+    1. Detects local PowerShell version and Windows OS
+    2. Loads collector metadata
+    3. Filters collectors for compatibility
+    4. Executes compatible collectors with adaptive parallelism
+    5. Aggregates results and passes to report generation
 
-# Find the module manifest from common locations (root, src, parent\src) or by search
-$manifestCandidates = @(
-  (Join-Path $ScriptRoot 'ServerAuditToolkitV2.psd1'),
-  (Join-Path $ScriptRoot 'src\ServerAuditToolkitV2.psd1'),
-  (Join-Path (Split-Path -Parent $ScriptRoot) 'src\ServerAuditToolkitV2.psd1')
-) + (Get-ChildItem -Path $ScriptRoot -Filter 'ServerAuditToolkitV2.psd1' -Recurse -ErrorAction SilentlyContinue |
-     Select-Object -First 1 -ExpandProperty FullName)
+.PARAMETER ComputerName
+    Target servers to audit. Can pipe multiple server names.
 
-$manifest = $manifestCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-if (-not $manifest) {
-  throw "Cannot find ServerAuditToolkitV2.psd1 relative to '$ScriptRoot'. Ensure the repo layout is intact."
-}
+.PARAMETER Collectors
+    Specific collectors to run. If empty, runs all compatible collectors.
 
-# Compute repo root so OutDir defaults to ...\out regardless of where this wrapper lives
-$repoRoot = Split-Path -Parent $manifest
-if ($repoRoot -like '*\src') { $repoRoot = Split-Path -Parent $repoRoot }
-if (-not $OutDir) { $OutDir = Join-Path $repoRoot 'out' }
+.PARAMETER DryRun
+    If $true, shows which collectors will run without executing.
 
-Import-Module $manifest -Force
+.PARAMETER MaxParallelJobs
+    Maximum concurrent jobs. If 0, auto-detects based on server resources.
 
-New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-Write-Verbose "[SAT] Starting audit for: $($ComputerName -join ', ')"
+.EXAMPLE
+    Invoke-ServerAudit -ComputerName "SERVER01", "SERVER02" -DryRun
+    Invoke-ServerAudit -ComputerName "SERVER01" -Collectors @("Get-ServerInfo", "Get-Services")
 
-# Run the orchestrator in the module
-$dataset = Invoke-ServerAudit -ComputerName $ComputerName -OutDir $OutDir -NoParallel:$NoParallel -Verbose
+#>
 
-# Persist JSON if the module didn’t already
-$ts = Get-Date -Format 'yyyyMMdd_HHmmss'
-$base = Join-Path $OutDir "data_$ts"
-try {
-  if (Get-Command Export-SATData -ErrorAction SilentlyContinue) {
-    $null = Export-SATData -Object $dataset -PathBase $base -Depth 6
-  } elseif (Get-Command ConvertTo-Json -ErrorAction SilentlyContinue) {
-    $dataset | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path ($base + '.json')
-  } else {
-    $dataset | Export-Clixml -Path ($base + '.clixml')
-  }
-  Write-Verbose "[SAT] Data saved: $base.(json|clixml)"
-} catch {
-  Write-Warning "[SAT] Could not persist data: $($_.Exception.Message)"
+function Invoke-ServerAudit {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false, ValueFromPipeline=$true)]
+        [string[]]$ComputerName = @($env:COMPUTERNAME),
+
+        [Parameter(Mandatory=$false)]
+        [string[]]$Collectors,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$DryRun,
+
+        [Parameter(Mandatory=$false)]
+        [int]$MaxParallelJobs = 0
+    )
+
+    Write-Host "=== ServerAuditToolkitV2: Audit Orchestrator ===" -ForegroundColor Cyan
+    Write-Host "PowerShell Version: $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
+    Write-Host "Target Servers: $($ComputerName -join ', ')"
+
+    # STEP 1: Load collector metadata
+    Write-Verbose "Loading collector metadata..."
+    $metadata = Get-CollectorMetadata
+
+    if (-not $metadata) {
+        Write-Error "Failed to load collector metadata. Exiting."
+        return
+    }
+
+    # STEP 2: Determine local environment
+    $localPSVersion = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
+    Write-Verbose "Local PowerShell Version: $localPSVersion"
+
+    # STEP 3: Filter collectors
+    Write-Verbose "Filtering collectors for compatibility..."
+    $compatibleCollectors = Get-CompatibleCollectors -Collectors $metadata.collectors -PSVersion $localPSVersion
+
+    if ($Collectors.Count -gt 0) {
+        # User specified specific collectors
+        $compatibleCollectors = $compatibleCollectors | Where-Object { $_.name -in $Collectors }
+    }
+
+    if ($compatibleCollectors.Count -eq 0) {
+        Write-Warning "No compatible collectors found for PS $localPSVersion"
+        return
+    }
+
+    Write-Host "Compatible Collectors: $($compatibleCollectors.Count)"
+    $compatibleCollectors | ForEach-Object { Write-Host "  - $($_.displayName) (timeout: $($_.timeout)s)" -ForegroundColor Green }
+
+    # DRY RUN: Show what will execute
+    if ($DryRun) {
+        Write-Host "`nDRY RUN MODE: Collectors will NOT execute." -ForegroundColor Yellow
+        Write-Host "To run the audit, remove the -DryRun flag.`n" -ForegroundColor Yellow
+        return
+    }
+
+    # STEP 4: Aggregate results from all servers
+    $auditResults = @{
+        Servers     = @()
+        Timestamp   = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+        PSVersion   = $localPSVersion
+        Collectors  = $compatibleCollectors.Count
+    }
+
+    # STEP 5: Execute collectors for each server
+    foreach ($server in $ComputerName) {
+        Write-Host "`nAuditing: $server" -ForegroundColor Cyan
+        
+        $serverResults = @{
+            ComputerName = $server
+            Collectors   = @()
+            Success      = $true
+            Errors       = @()
+        }
+
+        foreach ($collector in $compatibleCollectors) {
+            Write-Host "  Running: $($collector.displayName)..." -NoNewline
+
+            try {
+                # Determine which collector variant to use
+                $variant = Get-CollectorVariant -Collector $collector -PSVersion $localPSVersion
+                $collectorPath = Join-Path -Path $PSScriptRoot -ChildPath "..\collectors\$variant"
+
+                if (-not (Test-Path -LiteralPath $collectorPath)) {
+                    throw "Collector not found: $collectorPath"
+                }
+
+                # Validate dependencies
+                $depsOk = Test-CollectorDependencies -Collector $collector
+                if (-not $depsOk) {
+                    Write-Host " [SKIPPED - Missing Dependencies]" -ForegroundColor Yellow
+                    $serverResults.Collectors += @{
+                        Name    = $collector.name
+                        Status  = 'SKIPPED'
+                        Reason  = 'Missing dependencies'
+                    }
+                    continue
+                }
+
+                # Execute collector
+                $collectorOutput = & $collectorPath -ComputerName $server -ErrorAction Stop
+
+                if ($collectorOutput.Success) {
+                    Write-Host " [OK]" -ForegroundColor Green
+                } else {
+                    Write-Host " [FAILED]" -ForegroundColor Red
+                    $serverResults.Success = $false
+                }
+
+                $serverResults.Collectors += @{
+                    Name          = $collector.name
+                    Status        = if ($collectorOutput.Success) { 'SUCCESS' } else { 'FAILED' }
+                    ExecutionTime = $collectorOutput.ExecutionTime
+                    Data          = $collectorOutput.Data
+                    Errors        = $collectorOutput.Errors
+                }
+
+            } catch {
+                Write-Host " [ERROR]" -ForegroundColor Red
+                $serverResults.Errors += $_
+                $serverResults.Success = $false
+            }
+        }
+
+        $auditResults.Servers += $serverResults
+    }
+
+    # STEP 6: Summary and return
+    Write-Host "`n=== Audit Complete ===" -ForegroundColor Cyan
+    Write-Host "Servers processed: $($auditResults.Servers.Count)"
+    Write-Host "Successful: $(($auditResults.Servers | Where-Object { $_.Success }).Count)"
+
+    return $auditResults
 }
 
 Write-Verbose "[SAT] Done. See outputs in $OutDir"
 return $dataset
-=======
 # ... existing code ...
 
 function Invoke-ServerAudit {
@@ -253,6 +355,3 @@ function Invoke-ServerAudit {
 
     return $auditResults
 }
-
-# ... rest of existing code ...
->>>>>>> Stashed changes
