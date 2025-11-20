@@ -215,8 +215,31 @@ function Invoke-ServerAudit {
   return $results
 }
 
+# Import core functions
+. $PSScriptRoot\core\Get-CollectorMetadata.ps1
+. $PSScriptRoot\core\Invoke-ServerAudit.ps1
+# ... existing imports ...
+
+# Ensure all functions are exported
+Export-ModuleMember -Function @(
+    # Core
+    'Invoke-ServerAudit'
+    'Get-CollectorMetadata'
+    'Get-CompatibleCollectors'
+    'Get-CompatibleCollectorsByOS'
+    'Get-CollectorVariant'
+    'Test-CollectorDependencies'
+    'Get-WindowsVersionFromBuild'
+    'Get-CollectorSummary'
+    # ... existing exports ...
+)
+
+
+
+
 # ---------- Export ----------
-$exports = @('Invoke-ServerAudit','Write-SATCsv','New-SATReport','Get-SATCapability')
-$exports += (Get-Command -CommandType Function | Where-Object { $_.Name -like 'Get-SAT*' } | Select-Object -ExpandProperty Name)
-$exports = $exports | Sort-Object -Unique
-Export-ModuleMember -Function $exports
+#$exports = @('Invoke-ServerAudit','Write-SATCsv','New-SATReport','Get-SATCapability')
+#$exports += (Get-Command -CommandType Function | Where-Object { $_.Name -like 'Get-SAT*' } | Select-Object -ExpandProperty Name)
+#$exports = $exports | Sort-Object -Unique
+#Export-ModuleMember -Function $exports 
+#

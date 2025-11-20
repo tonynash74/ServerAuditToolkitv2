@@ -1,0 +1,145 @@
+{
+  "collectors": [
+    {
+      "name": "Get-ServerInfo",
+      "displayName": "Server Information",
+      "description": "Collects OS, hardware, network, and system information",
+      "filename": "Get-ServerInfo.ps1",
+      "category": "core",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 30,
+      "estimatedExecutionTime": 10,
+      "criticalForMigration": true,
+      "variants": {
+        "2.0": "Get-ServerInfo.ps1",
+        "4.0": "Get-ServerInfo.ps1",
+        "5.1": "Get-ServerInfo-PS5.ps1",
+        "7.0": "Get-ServerInfo-PS7.ps1"
+      }
+    },
+    {
+      "name": "Get-ADInfo",
+      "displayName": "Active Directory Information",
+      "description": "Collects AD membership, group policy, and domain information",
+      "filename": "Get-ADInfo.ps1",
+      "category": "infrastructure",
+      "psVersions": ["2.0", "4.0", "5.1"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": ["RSAT-AD-PowerShell"],
+      "timeout": 45,
+      "estimatedExecutionTime": 20,
+      "criticalForMigration": true,
+      "variants": {
+        "2.0": "Get-ADInfo.ps1",
+        "4.0": "Get-ADInfo.ps1",
+        "5.1": "Get-ADInfo-PS5.ps1"
+      }
+    },
+    {
+      "name": "Get-IISInfo",
+      "displayName": "IIS Configuration",
+      "description": "Collects IIS versions, bindings, application pools, and SSL certificates",
+      "filename": "Get-IISInfo.ps1",
+      "category": "application",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": ["WebAdministration"],
+      "timeout": 60,
+      "estimatedExecutionTime": 25,
+      "criticalForMigration": false,
+      "variants": {
+        "2.0": "Get-IISInfo.ps1",
+        "4.0": "Get-IISInfo.ps1",
+        "5.1": "Get-IISInfo-PS5.ps1",
+        "7.0": "Get-IISInfo-PS7.ps1"
+      }
+    },
+    {
+      "name": "Get-SQLServerInfo",
+      "displayName": "SQL Server Configuration",
+      "description": "Collects SQL Server instances, versions, databases, and configuration",
+      "filename": "Get-SQLServerInfo.ps1",
+      "category": "application",
+      "psVersions": ["2.0", "4.0", "5.1"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": ["SQL-Server-Management-Studio", "SQL-Server-PowerShell"],
+      "timeout": 90,
+      "estimatedExecutionTime": 40,
+      "criticalForMigration": true,
+      "variants": {
+        "2.0": "Get-SQLServerInfo.ps1",
+        "4.0": "Get-SQLServerInfo.ps1",
+        "5.1": "Get-SQLServerInfo-PS5.ps1"
+      }
+    },
+    {
+      "name": "Get-HyperVInfo",
+      "displayName": "Hyper-V Configuration",
+      "description": "Collects Hyper-V host settings and virtual machine inventory",
+      "filename": "Get-HyperVInfo.ps1",
+      "category": "infrastructure",
+      "psVersions": ["4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2012R2",
+      "maxWindowsVersion": null,
+      "dependencies": ["Hyper-V-PowerShell"],
+      "timeout": 60,
+      "estimatedExecutionTime": 30,
+      "criticalForMigration": false,
+      "variants": {
+        "4.0": "Get-HyperVInfo.ps1",
+        "5.1": "Get-HyperVInfo-PS5.ps1",
+        "7.0": "Get-HyperVInfo-PS7.ps1"
+      }
+    },
+    {
+      "name": "Get-Services",
+      "displayName": "Windows Services",
+      "description": "Collects running and installed Windows services with startup types",
+      "filename": "Get-Services.ps1",
+      "category": "core",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 30,
+      "estimatedExecutionTime": 10,
+      "criticalForMigration": false,
+      "variants": {
+        "2.0": "Get-Services.ps1",
+        "4.0": "Get-Services.ps1",
+        "5.1": "Get-Services-PS5.ps1",
+        "7.0": "Get-Services-PS7.ps1"
+      }
+    },
+    {
+      "name": "Get-InstalledApps",
+      "displayName": "Installed Applications",
+      "description": "Collects installed software from Windows registry and WMI",
+      "filename": "Get-InstalledApps.ps1",
+      "category": "core",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 45,
+      "estimatedExecutionTime": 20,
+      "criticalForMigration": true,
+      "variants": {
+        "2.0": "Get-InstalledApps.ps1",
+        "4.0": "Get-InstalledApps.ps1",
+        "5.1": "Get-InstalledApps-PS5.ps1",
+        "7.0": "Get-InstalledApps-PS7.ps1"
+      }
+    }
+  ],
+  "schema": {
+    "version": "1.0",
+    "description": "Collector metadata schema for ServerAuditToolkitV2. Enables version-aware, performance-optimized collector selection."
+  }
+}
