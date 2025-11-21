@@ -884,11 +884,17 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 ### Roadmap (Future Sprints)
 
-- 📋 **T4 (Next):** Migration Decisions Engine
-  - Orchestrator to mine T1-T3 data
-  - Recommend optimal migration destinations
-  - Path remediation strategies
-  - Link health scoring
+- 📋 **T4 (In Progress):** Migration Decisions Engine
+  - ✅ Phase 1: Core analysis engine (Analyze-MigrationReadiness.ps1)
+  - ✅ Phase 2: Integration & reporting (Invoke-MigrationDecisions.ps1, New-MigrationReport.ps1)
+  - 🔄 Phase 3: Advanced features (dependency mapping, cost modeling, link remediation)
+  - Mines T1-T3 data to recommend optimal migration destinations
+  - Workload classification (web, database, file server, etc.)
+  - Readiness scoring (0-100) with component breakdown
+  - 3+ destination options with TCO comparison
+  - Remediation plans (critical → nice-to-have)
+  - Migration timeline estimates
+  - Executive HTML reports
 
 - 📊 **Sprint 5:** Advanced Analytics
   - Dependency mapping (which servers/services depend on which)
