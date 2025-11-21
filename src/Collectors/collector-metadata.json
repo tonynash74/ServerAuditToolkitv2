@@ -138,8 +138,55 @@
       }
     }
   ],
+  "categorizedCollectors": {
+    "core": [
+      "Get-ServerInfo",
+      "Get-Services",
+      "Get-InstalledApps"
+    ],
+    "infrastructure": [
+      "Get-ADInfo",
+      "Get-DNSInfo",
+      "Get-DHCPInfo",
+      "Get-HyperVInfo"
+    ],
+    "application": [
+      "Get-IISInfo",
+      "Get-SQLServerInfo",
+      "Get-ExchangeInfo",
+      "Get-SharePointInfo"
+    ],
+    "compliance": [
+      "85-DataDiscovery",
+      "85-ScheduledTasks",
+      "90-LocalAccounts"
+    ]
+  },
   "schema": {
-    "version": "1.0",
-    "description": "Collector metadata schema for ServerAuditToolkitV2. Enables version-aware, performance-optimized collector selection."
+    "version": "2.0",
+    "lastModified": "2025-11-21",
+    "description": "Collector metadata schema for ServerAuditToolkitV2. Enables version-aware, performance-optimized collector selection with execution timing and timeout management.",
+    "fields": {
+      "name": "Unique collector identifier (used in Invoke-ServerAudit -Collectors parameter)",
+      "displayName": "Human-readable collector name for reports",
+      "description": "Brief description of what this collector discovers",
+      "filename": "Primary filename for this collector (base variant)",
+      "category": "Classification: core, infrastructure, application, or compliance",
+      "psVersions": "Array of PowerShell versions that support this collector",
+      "minWindowsVersion": "Minimum Windows Server version required (e.g., 2008R2, 2012R2, 2016)",
+      "maxWindowsVersion": "Maximum Windows Server version (null = no upper limit)",
+      "dependencies": "Required Windows features or modules (RSAT, WebAdministration, etc.)",
+      "timeout": "Max execution time in seconds for this collector",
+      "estimatedExecutionTime": "Typical execution time in seconds (for planning)",
+      "criticalForMigration": "Whether data from this collector is essential for migration decisions",
+      "variants": "Optimized implementations for specific PowerShell versions (e.g., PS5, PS7)"
+    }
+  },
+  "executionNotes": {
+    "maxConcurrentServers": 3,
+    "maxConcurrentCollectors": 2,
+    "businessHoursCutoff": "Stop execution 1 hour before 8:00 AM (configurable in audit-config.json)",
+    "timeoutBehavior": "Collectors exceeding timeout are stopped gracefully; audit continues with remaining collectors",
+    "errorHandling": "Failed collectors are logged but do not halt execution (continueOnError: true)"
   }
 }

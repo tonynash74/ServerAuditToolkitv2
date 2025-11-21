@@ -1,0 +1,169 @@
+{
+  "version": "1.0",
+  "description": "ServerAuditToolkitV2 configuration — timeouts, concurrency, business hours, and defaults",
+  "schema": {
+    "version": "1.0",
+    "lastModified": "2025-11-21"
+  },
+  "execution": {
+    "maxConcurrentServers": 3,
+    "maxConcurrentCollectors": 2,
+    "timeout": {
+      "default": 30,
+      "byCollector": {
+        "Get-ServerInfo": 25,
+        "Get-ServerInfo-PS5": 10,
+        "Get-ServerInfo-PS7": 8,
+        "Get-Services": 20,
+        "Get-Services-PS5": 8,
+        "Get-Services-PS7": 5,
+        "Get-IISInfo": 60,
+        "Get-IISInfo-PS5": 30,
+        "Get-IISInfo-PS7": 20,
+        "Get-SQLServerInfo": 90,
+        "Get-SQLServerInfo-PS5": 40,
+        "Get-ADInfo": 45,
+        "Get-ADInfo-PS5": 20,
+        "Get-HyperVInfo": 60,
+        "Get-HyperVInfo-PS5": 30,
+        "Get-HyperVInfo-PS7": 20,
+        "Get-DNSInfo": 30,
+        "Get-DHCPInfo": 60,
+        "Get-ExchangeInfo": 90,
+        "Get-SharePointInfo": 120,
+        "Get-Certificates": 30,
+        "Get-InstalledApps": 45,
+        "Get-InstalledApps-PS5": 20,
+        "85-DataDiscovery": 300,
+        "85-ScheduledTasks": 30,
+        "90-LocalAccounts": 15,
+        "95-Printers": 45,
+        "96-Exchange": 90,
+        "97-SQLServer": 90,
+        "98-WSUS": 45,
+        "99-SharePoint": 120
+      }
+    }
+  },
+  "businessHours": {
+    "enabled": true,
+    "description": "Stop execution if within N minutes of business start (prevent audit jamming during business hours)",
+    "startHour": 8,
+    "startMinute": 0,
+    "cutoffMinutesBefore": 60,
+    "timezone": "Local",
+    "note": "If current time is between 7:00-8:00 AM, audit will stop gracefully after current collector completes"
+  },
+  "performance": {
+    "enableParallelism": true,
+    "parallelismStrategy": "adaptive",
+    "description": "Adaptive: detect server CPU/RAM and optimize; Fixed: manual override",
+    "minParallelJobs": 1,
+    "maxParallelJobs": 3,
+    "jobQueueSize": 10
+  },
+  "networking": {
+    "transport": "WinRM",
+    "authentication": "Kerberos",
+    "useSSL": false,
+    "port": 5985,
+    "retryAttempts": 3,
+    "retryDelaySeconds": 2,
+    "connectionTimeoutSeconds": 30
+  },
+  "output": {
+    "formats": [
+      "JSON",
+      "CSV",
+      "HTML"
+    ],
+    "defaultFormat": "JSON",
+    "outputPath": "./audit_results",
+    "prettyPrint": true,
+    "includeMetadata": true,
+    "includeExecutionTimings": true
+  },
+  "logging": {
+    "enabled": true,
+    "level": "Information",
+    "levels": [
+      "Verbose",
+      "Information",
+      "Warning",
+      "Error"
+    ],
+    "logFile": "./audit_results/audit.log",
+    "logFormat": "JSON",
+    "writeToConsole": true,
+    "writeToFile": true
+  },
+  "compliance": {
+    "dataDiscovery": {
+      "enabled": true,
+      "timeout": 300,
+      "patterns": {
+        "SSN": {
+          "enabled": true,
+          "pattern": "\\d{3}-\\d{2}-\\d{4}",
+          "description": "US Social Security Number"
+        },
+        "CreditCard": {
+          "enabled": true,
+          "pattern": "\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}",
+          "description": "Credit card (basic pattern)"
+        },
+        "UK_SortCode": {
+          "enabled": true,
+          "pattern": "\\d{2}-\\d{2}-\\d{2}",
+          "description": "UK bank sort code"
+        },
+        "UK_IBAN": {
+          "enabled": true,
+          "pattern": "GB\\d{2}[A-Z]{4}\\d{14}",
+          "description": "UK IBAN"
+        },
+        "UK_NationalInsurance": {
+          "enabled": true,
+          "pattern": "[A-Z]{2}\\d{6}[A-D]",
+          "description": "UK National Insurance Number"
+        }
+      }
+    },
+    "sharesScanDepth": 3,
+    "fileSystemScanDepth": 2,
+    "excludePaths": [
+      "C:\\Windows",
+      "C:\\Program Files",
+      "C:\\Program Files (x86)",
+      "C:\\ProgramData"
+    ]
+  },
+  "collectors": {
+    "defaultEnabled": true,
+    "skipIfNotAvailable": false,
+    "continueOnError": true,
+    "exclude": [
+      "Get-ExchangeInfo",
+      "Get-SharePointInfo"
+    ],
+    "note": "Collectors in 'exclude' list will not run unless explicitly requested"
+  },
+  "prerequisites": {
+    "validateWinRM": true,
+    "validateNetworkAccess": true,
+    "validateCredentials": true,
+    "validateRSAT": true,
+    "stopOnFailure": false,
+    "note": "If stopOnFailure=true, audit halts if prerequisites fail; if false, continues with warnings"
+  },
+  "recommendations": {
+    "enabled": true,
+    "categories": [
+      "migration-readiness",
+      "security",
+      "compliance",
+      "performance",
+      "decommissioning"
+    ]
+  }
+}
