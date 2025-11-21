@@ -136,19 +136,228 @@
         "5.1": "Get-InstalledApps-PS5.ps1",
         "7.0": "Get-InstalledApps-PS7.ps1"
       }
+    },
+    {
+      "name": "Get-ServerRoles",
+      "displayName": "Server Roles and Features",
+      "description": "Collects Windows Server roles, features, and component inventory",
+      "filename": "Get-ServerRoles.ps1",
+      "category": "core",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 30,
+      "estimatedExecutionTime": 15,
+      "criticalForMigration": true,
+      "priority": "TIER1"
+    },
+    {
+      "name": "Get-ShareInfo",
+      "displayName": "File Shares and Permissions",
+      "description": "Collects file share paths, permissions, sizes, and access control",
+      "filename": "Get-ShareInfo.ps1",
+      "category": "infrastructure",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 60,
+      "estimatedExecutionTime": 30,
+      "criticalForMigration": true,
+      "priority": "TIER2"
+    },
+    {
+      "name": "Get-LocalAccounts",
+      "displayName": "Local User and Group Accounts",
+      "description": "Collects local user accounts, group memberships, and privilege levels",
+      "filename": "Get-LocalAccounts.ps1",
+      "category": "infrastructure",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 30,
+      "estimatedExecutionTime": 15,
+      "criticalForMigration": true,
+      "priority": "TIER2"
+    },
+    {
+      "name": "Get-ExchangeInfo",
+      "displayName": "Exchange Server Configuration",
+      "description": "Collects Exchange Server version, connectors, and database configuration",
+      "filename": "Get-ExchangeInfo.ps1",
+      "category": "application",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": ["Exchange-Server"],
+      "timeout": 90,
+      "estimatedExecutionTime": 45,
+      "criticalForMigration": false,
+      "priority": "TIER3"
+    },
+    {
+      "name": "Data-Discovery-PII",
+      "displayName": "PII Data Discovery",
+      "description": "Scans file systems for personally identifiable information (SSN, credit cards, email)",
+      "filename": "Data-Discovery-PII.ps1",
+      "category": "compliance",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 300,
+      "estimatedExecutionTime": 120,
+      "criticalForMigration": true,
+      "priority": "TIER4"
+    },
+    {
+      "name": "Data-Discovery-FinancialUK",
+      "displayName": "UK Financial Data Discovery",
+      "description": "Scans for UK-specific financial data (IBAN, sort codes, National Insurance numbers)",
+      "filename": "Data-Discovery-FinancialUK.ps1",
+      "category": "compliance",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 300,
+      "estimatedExecutionTime": 120,
+      "criticalForMigration": true,
+      "priority": "TIER4"
+    },
+    {
+      "name": "Data-Discovery-HeatMap",
+      "displayName": "Data Heat Map (Hot/Warm/Cool)",
+      "description": "Classifies data by modification date (HOT <30d, WARM 30-180d, COOL >180d)",
+      "filename": "Data-Discovery-HeatMap.ps1",
+      "category": "compliance",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 300,
+      "estimatedExecutionTime": 180,
+      "criticalForMigration": true,
+      "priority": "TIER4"
+    },
+    {
+      "name": "Get-ScheduledTasks",
+      "displayName": "Scheduled Tasks and Jobs",
+      "description": "Collects scheduled tasks, backup jobs, maintenance triggers, and execution history",
+      "filename": "Get-ScheduledTasks.ps1",
+      "category": "infrastructure",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 60,
+      "estimatedExecutionTime": 30,
+      "criticalForMigration": true,
+      "priority": "TIER5"
+    },
+    {
+      "name": "Get-CertificateInfo",
+      "displayName": "SSL/TLS Certificate Inventory",
+      "description": "Collects SSL/TLS certificates, expiry dates, issuer, and validity information",
+      "filename": "Get-CertificateInfo.ps1",
+      "category": "compliance",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 30,
+      "estimatedExecutionTime": 15,
+      "criticalForMigration": true,
+      "priority": "TIER5"
+    },
+    {
+      "name": "Get-DocumentLinks",
+      "displayName": "Document Link Extraction",
+      "description": "Extracts hyperlinks from Office documents (Word, Excel, PowerPoint) and PDFs with location context and link classification",
+      "filename": "Extract-DocumentLinks.ps1",
+      "category": "compliance",
+      "psVersions": ["3.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 120,
+      "estimatedExecutionTime": 60,
+      "criticalForMigration": true,
+      "priority": "TIER6",
+      "description_extended": "Identifies hardcoded file paths, external URLs, email links, and relative references embedded in document content. Uses Open XML SDK (built-in) for Office formats and ZIP relationship parsing. Essential for understanding document dependencies during file share migration and identifying potential broken references.",
+      "output": {
+        "Success": "boolean - whether extraction completed",
+        "DocumentPath": "string - path to source document",
+        "DocumentType": "string - .docx, .xlsx, .pptx, .pdf",
+        "Links": "array of {Url, LinkType, Context, SourceFile, IsInternal}",
+        "RecordCount": "integer - number of links extracted",
+        "Summary": "object with counts by LinkType"
+      },
+      "linkTypes": ["ExternalURL", "FilePath", "Email", "ExcelFile", "InternalLink", "RelativePath"]
+    },
+    {
+      "name": "Test-DocumentLinks",
+      "displayName": "Document Link Validation",
+      "description": "Validates extracted links by testing HTTP accessibility, file path existence, UNC shares, and email format. Includes intelligent caching and risk scoring.",
+      "filename": "Test-DocumentLinks.ps1",
+      "category": "compliance",
+      "psVersions": ["3.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 300,
+      "estimatedExecutionTime": 180,
+      "criticalForMigration": true,
+      "priority": "TIER6",
+      "description_extended": "Tests each unique link for reachability. HTTP/HTTPS links tested via Invoke-WebRequest. File paths tested via Test-Path. Results cached 24 hours to avoid redundant validation. Risk scores CRITICAL (broken external URLs), HIGH (invalid file paths), MEDIUM (timeout), LOW (valid).",
+      "output": {
+        "Success": "boolean",
+        "ValidatedLinks": "array of validation results",
+        "Summary": "object with counts by risk level and validity status",
+        "ExecutionTime": "timespan"
+      },
+      "riskLevels": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+      "cacheTTL": "24 hours"
+    },
+    {
+      "name": "Invoke-DocumentLinkAudit",
+      "displayName": "Document Link Audit Orchestration",
+      "description": "End-to-end orchestration: enumerate documents, extract links, validate, and generate executive reports with migration risk assessment",
+      "filename": "Invoke-DocumentLinkAudit.ps1",
+      "category": "compliance",
+      "psVersions": ["3.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 600,
+      "estimatedExecutionTime": 300,
+      "criticalForMigration": true,
+      "priority": "TIER6",
+      "description_extended": "High-level wrapper combining extraction and validation into a single audit run. Enumerates documents recursively, deduplicates links across files, validates in parallel, and generates JSON/CSV/HTML reports. Perfect for MSP document readiness assessments.",
+      "outputs": {
+        "JSON": "Complete audit data with extraction and validation results",
+        "CSV": "Broken links list (only if issues found)",
+        "HTML": "Executive dashboard with metrics, risk distribution, broken links table"
+      }
     }
   ],
   "categorizedCollectors": {
     "core": [
       "Get-ServerInfo",
       "Get-Services",
-      "Get-InstalledApps"
+      "Get-InstalledApps",
+      "Get-ServerRoles"
     ],
     "infrastructure": [
       "Get-ADInfo",
       "Get-DNSInfo",
       "Get-DHCPInfo",
-      "Get-HyperVInfo"
+      "Get-HyperVInfo",
+      "Get-ShareInfo",
+      "Get-LocalAccounts",
+      "Get-ScheduledTasks"
     ],
     "application": [
       "Get-IISInfo",
@@ -157,9 +366,13 @@
       "Get-SharePointInfo"
     ],
     "compliance": [
-      "85-DataDiscovery",
-      "85-ScheduledTasks",
-      "90-LocalAccounts"
+      "Data-Discovery-PII",
+      "Data-Discovery-FinancialUK",
+      "Data-Discovery-HeatMap",
+      "Get-CertificateInfo",
+      "Get-DocumentLinks",
+      "Test-DocumentLinks",
+      "Invoke-DocumentLinkAudit"
     ]
   },
   "schema": {
