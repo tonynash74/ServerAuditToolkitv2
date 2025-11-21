@@ -122,12 +122,16 @@ function Test-DocumentLinks {
 
         # Validate based on link type
         $validation = switch ($linkType) {
-            'ExternalURL'  { Test-ExternalURL -Url $url -Timeout $RequestTimeout }
-            'FilePath'     { Test-FilePath -Path $url }
-            'Email'        { Test-EmailAddress -Address $url }
-            'ExcelFile'    { Test-FilePath -Path $url }
-            'InternalLink' { @{ Valid = $true; Status = 'InternalAnchor'; ResponseCode = 0 } }
-            default        { @{ Valid = $null; Status = 'UNKNOWN'; Error = "Unknown link type: $linkType" } }
+            'ExternalURL'      { Test-ExternalURL -Url $url -Timeout $RequestTimeout }
+            'FilePath'         { Test-FilePath -Path $url }
+            'UNCPath'          { Test-FilePath -Path $url }
+            'LocalPath'        { Test-FilePath -Path $url }
+            'LocalExcelFile'   { Test-FilePath -Path $url }
+            'ExcelFile'        { Test-FilePath -Path $url }
+            'Email'            { Test-EmailAddress -Address $url }
+            'InternalLink'     { @{ Valid = $true; Status = 'InternalAnchor'; ResponseCode = 0 } }
+            'RelativePath'     { @{ Valid = $true; Status = 'RelativePath'; ResponseCode = 0 } }
+            default            { @{ Valid = $null; Status = 'UNKNOWN'; Error = "Unknown link type: $linkType" } }
         }
 
         # Enrich with risk scoring
@@ -333,9 +337,14 @@ function Get-LinkRiskLevel {
         return 'CRITICAL'
     }
 
-    # HIGH: Invalid file paths (hardcoded paths likely to change)
-    if ($Validation.Valid -eq $false -and $LinkType -in 'FilePath', 'ExcelFile') {
+    # HIGH: Invalid hardcoded local paths (will break on migration)
+    if ($Validation.Valid -eq $false -and $LinkType -in 'LocalPath', 'LocalExcelFile') {
         return 'HIGH'
+    }
+
+    # HIGH: Hardcoded local paths that exist now but may break post-migration
+    if ($LinkType -in 'LocalPath', 'LocalExcelFile') {
+        return 'HIGH'  # Pre-migration detection - treat as HIGH risk even if valid
     }
 
     # MEDIUM: Timeouts, unknown status
@@ -343,7 +352,12 @@ function Get-LinkRiskLevel {
         return 'MEDIUM'
     }
 
-    # LOW: Valid, or internal/anchor references
+    # LOW: UNC paths (network paths are migration-safe)
+    if ($LinkType -eq 'UNCPath') {
+        return 'LOW'
+    }
+
+    # LOW: Valid external URLs or internal/anchor references
     return 'LOW'
 }
 
@@ -360,14 +374,18 @@ function Get-LinkRecommendation {
             return "URGENT: This link is broken and likely to cause user issues. Update URL or remove reference. Link type: $LinkType"
         }
         'HIGH' {
-            if ($LinkType -in 'FilePath', 'ExcelFile') {
-                return "WARNING: This hardcoded file path may break after migration. Update to UNC path or document link mapping. Current: $($Validation.Error)"
+            if ($LinkType -in 'LocalPath', 'LocalExcelFile') {
+                return "WARNING: Hardcoded local path detected - will break after migration. Remediation: Convert to UNC path (\\server\share) or update path mapping post-migration. Current: $($Validation.Error)"
             }
+            return "WARNING: This link type has high migration risk. Manual review required."
         }
         'MEDIUM' {
             return "CAUTION: This link status is uncertain (timeout/unreachable). Verify manually or retry validation."
         }
         'LOW' {
+            if ($LinkType -eq 'UNCPath') {
+                return "OK: UNC path is migration-safe. No remediation needed."
+            }
             return "OK: This link appears valid. Monitor post-migration."
         }
         default {

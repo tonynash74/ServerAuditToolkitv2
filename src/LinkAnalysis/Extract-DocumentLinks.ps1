@@ -136,22 +136,28 @@ function Extract-WordDocumentLinks {
                         if ($rel.Type -match 'hyperlink') {
                             $target = $rel.Target
                             
-                            # Classify link type
+                            # Classify link type with detailed path categorization
                             $linkType = if ($target -match '^https?://') {
                                 'ExternalURL'
                             } elseif ($target -match '^mailto:') {
                                 'Email'
-                            } elseif ($target -match '^\\\\|^[a-z]:') {
-                                'FilePath'
+                            } elseif ($target -match '^\\\\[a-zA-Z0-9._-]+\\') {
+                                'UNCPath'  # \\server\share - migration safe
+                            } elseif ($target -match '^[a-zA-Z]:') {
+                                'LocalPath'  # C:\, D:\ etc - hardcoded, migration risk
                             } elseif ($target -match '^#') {
                                 'InternalAnchor'
                             } else {
                                 'RelativePath'
                             }
+                            
+                            # Path risk classification for migration planning
+                            $pathRisk = if ($linkType -eq 'LocalPath') { 'HIGH' } elseif ($linkType -eq 'UNCPath') { 'LOW' } else { 'UNKNOWN' }
 
                             $links += @{
                                 Url          = $target
                                 LinkType     = $linkType
+                                PathRisk     = $pathRisk  # For migration decisions engine
                                 RelationshipId = $rel.Id
                                 Context      = if ($ResolveContext) { "Word Document: $([System.IO.Path]::GetFileName($relEntry.FullName))" } else { $null }
                                 SourceFile   = $FilePath
@@ -260,15 +266,20 @@ function Extract-ExcelDocumentLinks {
                             'ExternalURL'
                         } elseif ($target -match '^mailto:') {
                             'Email'
+                        } elseif ($target -match '^\\\\[a-zA-Z0-9._-]+\\') {
+                            'UNCPath'
                         } elseif ($target -match '\.xlsx|\.xlsm|\.csv') {
                             'ExcelFile'
                         } else {
-                            'FilePath'
+                            'LocalPath'
                         }
+                        
+                        $pathRisk = if ($linkType -in 'LocalPath') { 'HIGH' } elseif ($linkType -eq 'UNCPath') { 'LOW' } else { 'UNKNOWN' }
 
                         $links += @{
                             Url          = $target
                             LinkType     = $linkType
+                            PathRisk     = $pathRisk
                             RelationshipId = $rel.Id
                             SheetContext = if ($ResolveContext) { "Workbook relationships" } else { $null }
                             SourceFile   = $FilePath
@@ -298,13 +309,20 @@ function Extract-ExcelDocumentLinks {
                                 'ExternalURL'
                             } elseif ($target -match '^mailto:') {
                                 'Email'
+                            } elseif ($target -match '^\\\\[a-zA-Z0-9._-]+\\') {
+                                'UNCPath'
+                            } elseif ($target -match '\.xlsx|\.xlsm|\.csv') {
+                                'ExcelFile'
                             } else {
-                                'FilePath'
+                                'LocalPath'
                             }
+                            
+                            $pathRisk = if ($linkType -in 'LocalPath') { 'HIGH' } elseif ($linkType -eq 'UNCPath') { 'LOW' } else { 'UNKNOWN' }
 
                             $links += @{
                                 Url          = $target
                                 LinkType     = $linkType
+                                PathRisk     = $pathRisk
                                 RelationshipId = $rel.Id
                                 SheetContext = $sheetName
                                 SourceFile   = $FilePath
@@ -364,9 +382,12 @@ function Extract-ExcelDocumentLinks {
             RecordCount   = @($links).Count
             Summary       = @{
                 ExternalURLs = @($links | Where-Object { $_.LinkType -eq 'ExternalURL' }).Count
-                FilePaths    = @($links | Where-Object { $_.LinkType -eq 'FilePath' }).Count
+                UNCPaths     = @($links | Where-Object { $_.LinkType -eq 'UNCPath' }).Count
+                LocalPaths   = @($links | Where-Object { $_.LinkType -eq 'LocalPath' }).Count
                 ExcelFiles   = @($links | Where-Object { $_.LinkType -eq 'ExcelFile' }).Count
                 Emails       = @($links | Where-Object { $_.LinkType -eq 'Email' }).Count
+                HighRisk     = @($links | Where-Object { $_.PathRisk -eq 'HIGH' }).Count
+                LowRisk      = @($links | Where-Object { $_.PathRisk -eq 'LOW' }).Count
             }
         }
     }
@@ -409,7 +430,7 @@ function Extract-PowerPointDocumentLinks {
 
                     $slideNumber = if ($slideRelEntry.FullName -match 'slide(\d+)') { [int]$Matches[1] } else { 0 }
 
-                    foreach ($rel in $slideRelXml.Relationships.Relationship) {
+                    foreach ($rel in $wsRelXml.Relationships.Relationship) {
                         if ($rel.Type -match 'hyperlink') {
                             $target = $rel.Target
 
@@ -417,15 +438,22 @@ function Extract-PowerPointDocumentLinks {
                                 'ExternalURL'
                             } elseif ($target -match '^mailto:') {
                                 'Email'
-                            } elseif ($target -match '^#') {
-                                'InternalLink'
+                            } elseif ($target -match '^\\\\[a-zA-Z0-9._-]+\\') {
+                                'UNCPath'
+                            } elseif ($target -match '^[a-zA-Z]:.*\.(xlsx|xlsm|csv)$') {
+                                'LocalExcelFile'
+                            } elseif ($target -match '^[a-zA-Z]:') {
+                                'LocalPath'
                             } else {
-                                'FilePath'
+                                'RelativePath'
                             }
+                            
+                            $pathRisk = if ($linkType -in 'LocalPath', 'LocalExcelFile') { 'HIGH' } elseif ($linkType -eq 'UNCPath') { 'LOW' } else { 'UNKNOWN' }
 
                             $links += @{
                                 Url          = $target
                                 LinkType     = $linkType
+                                PathRisk     = $pathRisk
                                 RelationshipId = $rel.Id
                                 SlideNumber  = $slideNumber
                                 Context      = if ($ResolveContext) { "Slide $slideNumber" } else { $null }
@@ -493,10 +521,12 @@ function Extract-PowerPointDocumentLinks {
             RecordCount   = @($links).Count
             Summary       = @{
                 ExternalURLs = @($links | Where-Object { $_.LinkType -eq 'ExternalURL' }).Count
-                FilePaths    = @($links | Where-Object { $_.LinkType -eq 'FilePath' }).Count
-                InternalLinks = @($links | Where-Object { $_.LinkType -eq 'InternalLink' }).Count
+                UNCPaths     = @($links | Where-Object { $_.LinkType -eq 'UNCPath' }).Count
+                LocalPaths   = @($links | Where-Object { $_.LinkType -eq 'LocalPath' }).Count
+                LocalExcelFiles = @($links | Where-Object { $_.LinkType -eq 'LocalExcelFile' }).Count
                 Emails       = @($links | Where-Object { $_.LinkType -eq 'Email' }).Count
-                LinksInNotes = @($links | Where-Object { $_.LocationType -eq 'Notes' }).Count
+                HighRisk     = @($links | Where-Object { $_.PathRisk -eq 'HIGH' }).Count
+                LowRisk      = @($links | Where-Object { $_.PathRisk -eq 'LOW' }).Count
             }
         }
     }
@@ -519,33 +549,197 @@ function Extract-PDFDocumentLinks {
     )
 
     $startTime = Get-Date
+    $links = @()
 
-    # Graceful fallback: if iText7 not available, use text extraction method
     try {
-        # Check if iText7 is available
-        [Reflection.Assembly]::Load("iText.Kernel") | Out-Null
+        # Tier 1: Try iText7 library
+        try {
+            [Reflection.Assembly]::Load("iText.Kernel") | Out-Null
+            [Reflection.Assembly]::Load("iText.Forms") | Out-Null
+            
+            # iText7 PDF processing
+            $pdfDocument = New-Object iText.Kernel.Pdf.PdfDocument(
+                (New-Object iText.Kernel.Pdf.PdfReader($FilePath))
+            )
+            
+            $pageCount = $pdfDocument.GetNumberOfPages()
+            
+            for ($pageNum = 1; $pageNum -le $pageCount; $pageNum++) {
+                try {
+                    $page = $pdfDocument.GetPage($pageNum)
+                    $annotations = $page.GetAnnotations()
+                    
+                    foreach ($annot in $annotations) {
+                        if ($annot.GetSubtype() -match 'Link') {
+                            $uri = $null
+                            $action = $annot.GetAction()
+                            
+                            if ($action) {
+                                # Try to extract URI from action
+                                if ($action.Get('/URI')) {
+                                    $uri = $action.Get('/URI').ToString()
+                                }
+                            }
+                            
+                            if ($uri) {
+                                $linkType = if ($uri -match '^https?://') {
+                                    'ExternalURL'
+                                } elseif ($uri -match '^mailto:') {
+                                    'Email'
+                                } elseif ($uri -match '^\\\\[a-zA-Z0-9._-]+\\') {
+                                    'UNCPath'
+                                } elseif ($uri -match '^[a-zA-Z]:.*\.(xlsx|xlsm|csv)$') {
+                                    'LocalExcelFile'
+                                } elseif ($uri -match '^[a-zA-Z]:') {
+                                    'LocalPath'
+                                } else {
+                                    'RelativePath'
+                                }
+                                
+                                $pathRisk = if ($linkType -in 'LocalPath', 'LocalExcelFile') { 'HIGH' } elseif ($linkType -eq 'UNCPath') { 'LOW' } else { 'UNKNOWN' }
+                                
+                                $links += @{
+                                    Url          = $uri
+                                    LinkType     = $linkType
+                                    PathRisk     = $pathRisk
+                                    PageNumber   = $pageNum
+                                    Context      = "Page $pageNum"
+                                    SourceFile   = $FilePath
+                                    IsInternal   = $false
+                                    ExtractionMethod = 'iText7'
+                                }
+                            }
+                        }
+                    }
+                }
+                catch {
+                    Write-Verbose "Error processing PDF page $pageNum : $_"
+                }
+            }
+            
+            $pdfDocument.Close()
+            
+            return @{
+                Success       = $true
+                DocumentPath  = $FilePath
+                DocumentType  = '.pdf'
+                Links         = $links
+                ExecutionTime = (Get-Date) - $startTime
+                RecordCount   = @($links).Count
+                ExtractionMethod = 'iText7'
+                Summary       = @{
+                    ExternalURLs = @($links | Where-Object { $_.LinkType -eq 'ExternalURL' }).Count
+                    UNCPaths     = @($links | Where-Object { $_.LinkType -eq 'UNCPath' }).Count
+                    LocalPaths   = @($links | Where-Object { $_.LinkType -eq 'LocalPath' }).Count
+                    Emails       = @($links | Where-Object { $_.LinkType -eq 'Email' }).Count
+                    HighRisk     = @($links | Where-Object { $_.PathRisk -eq 'HIGH' }).Count
+                    LowRisk      = @($links | Where-Object { $_.PathRisk -eq 'LOW' }).Count
+                }
+            }
+        }
+        catch {
+            Write-Verbose "iText7 not available or extraction failed: $_; attempting regex fallback..."
+        }
         
-        # TODO: Implement iText7 PDF link extraction
-        # For now, return graceful message
-        return @{
-            Success       = $true
-            DocumentPath  = $FilePath
-            DocumentType  = '.pdf'
-            Links         = @()
-            ExecutionTime = (Get-Date) - $startTime
-            RecordCount   = 0
-            Status        = 'PDF support requires iText7 library (not installed); graceful fallback'
+        # Tier 2: Regex text extraction fallback
+        try {
+            # Extract text content from PDF
+            $pdfReader = New-Object System.IO.FileStream($FilePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
+            $pdfBytes = New-Object byte[] $pdfReader.Length
+            $pdfReader.Read($pdfBytes, 0, $pdfBytes.Length) | Out-Null
+            $pdfReader.Close()
+            
+            $pdfText = [System.Text.Encoding]::ASCII.GetString($pdfBytes)
+            
+            # Extract URLs using regex patterns
+            $urlPatterns = @(
+                'https?://[^\s<>"{}|\\^`\[\]]*',  # HTTP/HTTPS URLs
+                '\\\\[a-zA-Z0-9._-]+\\[^\s<>"{}|\\^`\[\]]*',  # UNC paths
+                '[a-zA-Z]:\\[^\s<>"{}|\\^`\[\]]*\.(xlsx|xlsm|csv)',  # Excel files
+                '[a-zA-Z]:\\[^\s<>"{}|\\^`\[\]]*',  # Local paths
+                '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'  # Email addresses
+            )
+            
+            $foundUrls = @()
+            foreach ($pattern in $urlPatterns) {
+                $matches = [regex]::Matches($pdfText, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                foreach ($match in $matches) {
+                    if ($match.Value -and $foundUrls -notcontains $match.Value) {
+                        $foundUrls += $match.Value
+                    }
+                }
+            }
+            
+            $pageNum = 0
+            foreach ($url in $foundUrls) {
+                $linkType = if ($url -match '^https?://') {
+                    'ExternalURL'
+                } elseif ($url -match '^mailto:|@') {
+                    'Email'
+                } elseif ($url -match '^\\\\[a-zA-Z0-9._-]+\\') {
+                    'UNCPath'
+                } elseif ($url -match '^[a-zA-Z]:.*\.(xlsx|xlsm|csv)$') {
+                    'LocalExcelFile'
+                } elseif ($url -match '^[a-zA-Z]:') {
+                    'LocalPath'
+                } else {
+                    'RelativePath'
+                }
+                
+                $pathRisk = if ($linkType -in 'LocalPath', 'LocalExcelFile') { 'HIGH' } elseif ($linkType -eq 'UNCPath') { 'LOW' } else { 'UNKNOWN' }
+                
+                $links += @{
+                    Url          = $url
+                    LinkType     = $linkType
+                    PathRisk     = $pathRisk
+                    PageNumber   = 0  # Unknown page with regex extraction
+                    Context      = "PDF text (page unknown)"
+                    SourceFile   = $FilePath
+                    IsInternal   = $false
+                    ExtractionMethod = 'RegexFallback'
+                }
+            }
+            
+            return @{
+                Success       = $true
+                DocumentPath  = $FilePath
+                DocumentType  = '.pdf'
+                Links         = $links
+                ExecutionTime = (Get-Date) - $startTime
+                RecordCount   = @($links).Count
+                ExtractionMethod = 'RegexFallback'
+                Summary       = @{
+                    ExternalURLs = @($links | Where-Object { $_.LinkType -eq 'ExternalURL' }).Count
+                    UNCPaths     = @($links | Where-Object { $_.LinkType -eq 'UNCPath' }).Count
+                    LocalPaths   = @($links | Where-Object { $_.LinkType -eq 'LocalPath' }).Count
+                    Emails       = @($links | Where-Object { $_.LinkType -eq 'Email' }).Count
+                    HighRisk     = @($links | Where-Object { $_.PathRisk -eq 'HIGH' }).Count
+                    LowRisk      = @($links | Where-Object { $_.PathRisk -eq 'LOW' }).Count
+                }
+            }
+        }
+        catch {
+            Write-Verbose "Regex fallback also failed: $_"
+            return @{
+                Success       = $true
+                DocumentPath  = $FilePath
+                DocumentType  = '.pdf'
+                Links         = @()
+                ExecutionTime = (Get-Date) - $startTime
+                RecordCount   = 0
+                ExtractionMethod = 'None'
+                Status        = 'No links extracted from PDF'
+            }
         }
     }
     catch {
         return @{
-            Success       = $true
+            Success       = $false
             DocumentPath  = $FilePath
             DocumentType  = '.pdf'
-            Links         = @()
+            Error         = $_.Exception.Message
             ExecutionTime = (Get-Date) - $startTime
             RecordCount   = 0
-            Status        = 'PDF processing unavailable (iText7 not installed); install via: Install-Package itext7 -Source nuget.org'
         }
     }
 }
