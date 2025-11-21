@@ -136,19 +136,158 @@
         "5.1": "Get-InstalledApps-PS5.ps1",
         "7.0": "Get-InstalledApps-PS7.ps1"
       }
+    },
+    {
+      "name": "Get-ServerRoles",
+      "displayName": "Server Roles and Features",
+      "description": "Collects Windows Server roles, features, and component inventory",
+      "filename": "Get-ServerRoles.ps1",
+      "category": "core",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 30,
+      "estimatedExecutionTime": 15,
+      "criticalForMigration": true,
+      "priority": "TIER1"
+    },
+    {
+      "name": "Get-ShareInfo",
+      "displayName": "File Shares and Permissions",
+      "description": "Collects file share paths, permissions, sizes, and access control",
+      "filename": "Get-ShareInfo.ps1",
+      "category": "infrastructure",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 60,
+      "estimatedExecutionTime": 30,
+      "criticalForMigration": true,
+      "priority": "TIER2"
+    },
+    {
+      "name": "Get-LocalAccounts",
+      "displayName": "Local User and Group Accounts",
+      "description": "Collects local user accounts, group memberships, and privilege levels",
+      "filename": "Get-LocalAccounts.ps1",
+      "category": "infrastructure",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 30,
+      "estimatedExecutionTime": 15,
+      "criticalForMigration": true,
+      "priority": "TIER2"
+    },
+    {
+      "name": "Get-ExchangeInfo",
+      "displayName": "Exchange Server Configuration",
+      "description": "Collects Exchange Server version, connectors, and database configuration",
+      "filename": "Get-ExchangeInfo.ps1",
+      "category": "application",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": ["Exchange-Server"],
+      "timeout": 90,
+      "estimatedExecutionTime": 45,
+      "criticalForMigration": false,
+      "priority": "TIER3"
+    },
+    {
+      "name": "Data-Discovery-PII",
+      "displayName": "PII Data Discovery",
+      "description": "Scans file systems for personally identifiable information (SSN, credit cards, email)",
+      "filename": "Data-Discovery-PII.ps1",
+      "category": "compliance",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 300,
+      "estimatedExecutionTime": 120,
+      "criticalForMigration": true,
+      "priority": "TIER4"
+    },
+    {
+      "name": "Data-Discovery-FinancialUK",
+      "displayName": "UK Financial Data Discovery",
+      "description": "Scans for UK-specific financial data (IBAN, sort codes, National Insurance numbers)",
+      "filename": "Data-Discovery-FinancialUK.ps1",
+      "category": "compliance",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 300,
+      "estimatedExecutionTime": 120,
+      "criticalForMigration": true,
+      "priority": "TIER4"
+    },
+    {
+      "name": "Data-Discovery-HeatMap",
+      "displayName": "Data Heat Map (Hot/Warm/Cool)",
+      "description": "Classifies data by modification date (HOT <30d, WARM 30-180d, COOL >180d)",
+      "filename": "Data-Discovery-HeatMap.ps1",
+      "category": "compliance",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 300,
+      "estimatedExecutionTime": 180,
+      "criticalForMigration": true,
+      "priority": "TIER4"
+    },
+    {
+      "name": "Get-ScheduledTasks",
+      "displayName": "Scheduled Tasks and Jobs",
+      "description": "Collects scheduled tasks, backup jobs, maintenance triggers, and execution history",
+      "filename": "Get-ScheduledTasks.ps1",
+      "category": "infrastructure",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 60,
+      "estimatedExecutionTime": 30,
+      "criticalForMigration": true,
+      "priority": "TIER5"
+    },
+    {
+      "name": "Get-CertificateInfo",
+      "displayName": "SSL/TLS Certificate Inventory",
+      "description": "Collects SSL/TLS certificates, expiry dates, issuer, and validity information",
+      "filename": "Get-CertificateInfo.ps1",
+      "category": "compliance",
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
+      "minWindowsVersion": "2008R2",
+      "maxWindowsVersion": null,
+      "dependencies": [],
+      "timeout": 30,
+      "estimatedExecutionTime": 15,
+      "criticalForMigration": true,
+      "priority": "TIER5"
     }
   ],
   "categorizedCollectors": {
     "core": [
       "Get-ServerInfo",
       "Get-Services",
-      "Get-InstalledApps"
+      "Get-InstalledApps",
+      "Get-ServerRoles"
     ],
     "infrastructure": [
       "Get-ADInfo",
       "Get-DNSInfo",
       "Get-DHCPInfo",
-      "Get-HyperVInfo"
+      "Get-HyperVInfo",
+      "Get-ShareInfo",
+      "Get-LocalAccounts",
+      "Get-ScheduledTasks"
     ],
     "application": [
       "Get-IISInfo",
@@ -157,9 +296,10 @@
       "Get-SharePointInfo"
     ],
     "compliance": [
-      "85-DataDiscovery",
-      "85-ScheduledTasks",
-      "90-LocalAccounts"
+      "Data-Discovery-PII",
+      "Data-Discovery-FinancialUK",
+      "Data-Discovery-HeatMap",
+      "Get-CertificateInfo"
     ]
   },
   "schema": {
