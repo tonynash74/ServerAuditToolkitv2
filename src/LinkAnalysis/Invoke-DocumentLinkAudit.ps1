@@ -315,6 +315,30 @@ function New-DocumentLinkAuditHTML {
     </div>
 
     <div class="card">
+        <h2>Migration Risk Assessment</h2>
+        <div class="summary">
+            <div class="metric">
+                <div class="metric-value high">${ $Audit.ValidationResults.LocalPaths }</div>
+                <div class="metric-label">🔴 Hardcoded Local Paths</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value low">${ $Audit.ValidationResults.UNCPaths }</div>
+                <div class="metric-label">🟢 UNC Paths (Safe)</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value medium">${ $Audit.ValidationResults.ExternalURLs }</div>
+                <div class="metric-label">🔗 External URLs</div>
+            </div>
+        </div>
+        <p><strong>Migration Impact:</strong></p>
+        <ul>
+            <li><strong>Hardcoded Local Paths:</strong> Will break after migration. Require path remediation or UNC conversion.</li>
+            <li><strong>UNC Paths:</strong> Migration-safe. Network paths remain accessible post-migration.</li>
+            <li><strong>External URLs:</strong> Validate availability in target environment.</li>
+        </ul>
+    </div>
+
+    <div class="card">
         <h2>Broken Links (Migration Blockers)</h2>
         $(
             if ($Audit.BrokenLinks.Count -gt 0) {
