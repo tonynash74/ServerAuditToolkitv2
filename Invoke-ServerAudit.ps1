@@ -131,6 +131,25 @@ function Invoke-ServerAudit {
         Write-AuditLog "Local PS Version: $($auditSession.LocalPSVersion)" -Level Verbose
         Write-AuditLog "Local OS Version: $($auditSession.LocalOSVersion)" -Level Verbose
 
+        # M-009: Start resource monitoring (CPU/Memory throttling)
+        Write-AuditLog "M-009: Starting resource monitoring for auto-throttling" -Level Verbose
+        try {
+            $resourceMonitorJob = Start-AuditResourceMonitoring `
+                -MaxParallelJobs ($MaxParallelJobs -gt 0 ? $MaxParallelJobs : 3) `
+                -CpuThreshold 85 `
+                -MemoryThreshold 90 `
+                -MonitoringIntervalSeconds 2 `
+                -ErrorAction SilentlyContinue
+            
+            if ($resourceMonitorJob) {
+                $auditSession.ResourceMonitorJob = $resourceMonitorJob
+                Write-AuditLog "Resource monitoring active (Job ID: $($resourceMonitorJob.Id))" -Level Verbose
+            }
+        }
+        catch {
+            Write-AuditLog "Resource monitoring unavailable (non-critical): $_" -Level Warning
+        }
+
         # Load configuration with timeout settings
         $configPath = Join-Path -Path $PSScriptRoot -ChildPath 'data\audit-config.json'
         $config = $null
@@ -443,6 +462,20 @@ function Invoke-ServerAudit {
             Write-AuditLog "Collectors executed: $($auditSession.AuditResults.Summary.TotalCollectorsSucceeded)/$($auditSession.AuditResults.Summary.TotalCollectorsExecuted)" -Level Information
             Write-AuditLog "Duration: $($auditSession.AuditResults.Summary.DurationSeconds)s" -Level Information
             Write-AuditLog "Results exported to: $OutputPath" -Level Information
+
+            # M-009: Stop resource monitoring
+            if ($auditSession.ResourceMonitorJob) {
+                try {
+                    Stop-AuditResourceMonitoring -ErrorAction SilentlyContinue
+                    $resourceStats = Get-AuditResourceStatistics -ErrorAction SilentlyContinue
+                    if ($resourceStats) {
+                        Write-AuditLog "Resource Monitoring: Throttle events=$($resourceStats.TotalThrottleEvents) Recovery events=$($resourceStats.TotalRecoveryEvents)" -Level Verbose
+                    }
+                }
+                catch {
+                    Write-AuditLog "Failed to stop resource monitoring: $_" -Level Warning
+                }
+            }
 
             return $auditSession.AuditResults
 
