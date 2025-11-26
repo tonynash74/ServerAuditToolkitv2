@@ -229,6 +229,47 @@ function Invoke-ServerAudit {
             Write-AuditLog "Parameter validation failed: $_" -Level Error
             throw
         }
+
+        # ====== STAGE 1.5: HEALTH CHECK ======
+        Write-AuditLog "STAGE 1.5: HEALTH CHECK (Pre-flight Validation)" -Level Information
+        try {
+            Write-AuditLog "Running prerequisite health checks for $($ComputerName.Count) server(s)..." -Level Information
+            $healthReport = Test-AuditPrerequisites `
+                -ComputerName $ComputerName `
+                -Port 5985 `
+                -Timeout 10 `
+                -Parallel $true `
+                -ThrottleLimit 3 `
+                -Verbose:($LogLevel -eq 'Verbose')
+            
+            # Log health check results
+            Write-AuditLog "Health check completed: Passed=$($healthReport.Summary.Passed) Failed=$($healthReport.Summary.Failed) Warnings=$($healthReport.Summary.Warnings)" -Level Information
+            
+            if (-not $healthReport.IsHealthy) {
+                Write-AuditLog "⚠ Health check warnings detected:" -Level Warning
+                foreach ($issue in $healthReport.Issues) {
+                    Write-AuditLog "  - $issue" -Level Warning
+                }
+                
+                if ($healthReport.Summary.Failed -gt 0) {
+                    Write-AuditLog "❌ Critical health check failures detected. Audit cannot proceed without addressing these issues:" -Level Error
+                    foreach ($remediation in $healthReport.Remediation | Select-Object -Unique) {
+                        Write-AuditLog "  💡 $remediation" -Level Error
+                    }
+                    throw "Pre-flight health check failed for $($healthReport.Summary.Failed) server(s)"
+                }
+            }
+            else {
+                Write-AuditLog "✓ All servers passed health checks. Proceeding with audit." -Level Information
+            }
+            
+            # Store health report in audit session for later reporting
+            $auditSession.HealthReport = $healthReport
+            
+        } catch {
+            Write-AuditLog "Health check stage failed: $_" -Level Error
+            throw
+        }
         
         foreach ($server in $ComputerName) {
             Write-AuditLog "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -Level Information
