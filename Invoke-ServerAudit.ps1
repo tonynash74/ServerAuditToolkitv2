@@ -130,6 +130,19 @@ function Invoke-ServerAudit {
         Write-AuditLog "Local PS Version: $($auditSession.LocalPSVersion)" -Level Verbose
         Write-AuditLog "Local OS Version: $($auditSession.LocalOSVersion)" -Level Verbose
 
+        # Load configuration with timeout settings
+        $configPath = Join-Path -Path $PSScriptRoot -ChildPath 'data\audit-config.json'
+        $config = $null
+        if (Test-Path -LiteralPath $configPath) {
+            try {
+                $config = Get-Content -LiteralPath $configPath | ConvertFrom-Json
+                Write-AuditLog "Loaded audit configuration from: $configPath" -Level Verbose
+            } catch {
+                Write-AuditLog "Failed to load audit configuration: $_" -Level Warning
+            }
+        }
+        $auditSession.Config = $config
+
         # Resolve collector path
         if ([string]::IsNullOrEmpty($CollectorPath)) {
             $CollectorPath = Join-Path -Path $PSScriptRoot -ChildPath '..\collectors'
@@ -295,11 +308,20 @@ function Invoke-ServerAudit {
                 Write-AuditLog "STAGE 2b: EXECUTE (Run Collectors, T3)" -Level Information
                 Write-AuditLog "Executing $($auditSession.CompatibleCollectors.Count) collectors with parallelism=$($serverResults.ParallelismUsed)" -Level Information
 
+                # Build timeout configuration for collectors
+                $timeoutConfig = @{}
+                if ($auditSession.Config -and $auditSession.Config.execution.timeout.collectorTimeouts) {
+                    $timeoutConfig = $auditSession.Config.execution.timeout.collectorTimeouts
+                }
+
                 $collectorResults = Invoke-CollectorExecution `
                     -Server $server `
                     -Collectors $auditSession.CompatibleCollectors `
                     -Parallelism $serverResults.ParallelismUsed `
                     -TimeoutSeconds $serverResults.TimeoutUsed `
+                    -TimeoutConfig $timeoutConfig `
+                    -PSVersion $auditSession.LocalPSVersion `
+                    -IsSlowServer $($serverResults.PerformanceProfile.ResourceConstraints.Count -gt 0) `
                     -DryRun:$DryRun `
                     -CollectorPath $CollectorPath `
                     -PSVersion $auditSession.LocalPSVersion
@@ -403,13 +425,19 @@ function Invoke-CollectorExecution {
         [int]$TimeoutSeconds,
 
         [Parameter(Mandatory=$false)]
+        [hashtable]$TimeoutConfig,
+
+        [Parameter(Mandatory=$false)]
+        [int]$PSVersion = $PSVersionTable.PSVersion.Major,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$IsSlowServer,
+
+        [Parameter(Mandatory=$false)]
         [switch]$DryRun,
 
         [Parameter(Mandatory=$true)]
-        [string]$CollectorPath,
-
-        [Parameter(Mandatory=$true)]
-        [string]$PSVersion
+        [string]$CollectorPath
     )
 
     $results = @()
@@ -419,10 +447,20 @@ function Invoke-CollectorExecution {
         Write-AuditLog "Using sequential execution (PS $PSVersion or Parallelism=1)" -Level Verbose
 
         foreach ($collector in $Collectors) {
+            # Calculate adaptive timeout for this collector
+            $collectorTimeout = $TimeoutSeconds
+            if ($TimeoutConfig) {
+                $collectorTimeout = Get-AdjustedTimeout `
+                    -CollectorName $collector.name `
+                    -PSVersion $PSVersion `
+                    -TimeoutConfig $TimeoutConfig `
+                    -IsSlowServer:$IsSlowServer
+            }
+
             $collectorResult = Invoke-SingleCollector `
                 -Server $Server `
                 -Collector $collector `
-                -TimeoutSeconds $TimeoutSeconds `
+                -TimeoutSeconds $collectorTimeout `
                 -DryRun:$DryRun `
                 -CollectorPath $CollectorPath `
                 -PSVersion $PSVersion
@@ -438,9 +476,11 @@ function Invoke-CollectorExecution {
             -Collectors $Collectors `
             -MaxJobs $Parallelism `
             -TimeoutSeconds $TimeoutSeconds `
+            -TimeoutConfig $TimeoutConfig `
+            -PSVersion $PSVersion `
+            -IsSlowServer:$IsSlowServer `
             -DryRun:$DryRun `
-            -CollectorPath $CollectorPath `
-            -PSVersion $PSVersion
+            -CollectorPath $CollectorPath
     }
 
     return $results
