@@ -286,13 +286,16 @@ function Get-ServerInfo-PS5 {
         $result.Success = $true
 
     } catch [System.UnauthorizedAccessException] {
-        $result.Errors += "Access Denied collecting from $ComputerName"
+        $error = Convert-AuditError -ErrorRecord $_ -Context "ServerInfo collection from $ComputerName"
+        $result.Errors += ("Access Denied: {0}. {1}" -f $error.Message, $error.Remediation)
 
     } catch [System.Net.NetworkInformation.PingException] {
-        $result.Errors += "Network unreachable: $ComputerName"
+        $error = Convert-AuditError -ErrorRecord $_ -Context "ServerInfo network test for $ComputerName"
+        $result.Errors += ("Network unreachable: {0}. {1}" -f $error.Message, $error.Remediation)
 
     } catch {
-        $result.Errors += "Unexpected error: $_"
+        $error = Convert-AuditError -ErrorRecord $_ -Context "ServerInfo collection from $ComputerName"
+        $result.Errors += ("Unexpected error: {0}. {1}" -f $error.Message, $error.Remediation)
 
     } finally {
         $stopwatch.Stop()

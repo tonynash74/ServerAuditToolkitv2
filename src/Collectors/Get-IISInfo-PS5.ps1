@@ -231,7 +231,8 @@ function Get-IISInfo-PS5 {
         $result.Success = $true
 
     } catch {
-        $result.Errors += "IIS collection failed: $_"
+        $error = Convert-AuditError -ErrorRecord $_ -Context "IIS collection from $ComputerName"
+        $result.Errors += ("IIS collection failed: {0}. {1}" -f $error.Message, $error.Remediation)
 
     } finally {
         $stopwatch.Stop()

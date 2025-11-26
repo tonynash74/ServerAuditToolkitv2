@@ -70,20 +70,32 @@
         $out[$c] = $res
       }
     } catch [System.UnauthorizedAccessException] {
-      Write-Log Error ("DNS collector — Access denied on {0}. Verify credentials and admin privileges." -f $c)
+      $error = Convert-AuditError -ErrorRecord $_ -Context "DNS collector on $c"
+      Write-Log Error ("DNS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Info ("Remediation: {0}" -f $error.Remediation)
       $out[$c] = @{ 
-        Error = "Authorization failed. User must be in Administrators group."
-        ErrorType = 'AuthenticationFailure'
+        Error = $error.Message
+        ErrorType = $error.Category
+        ErrorDetails = $error.Remediation
       }
     } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
-      Write-Log Error ("DNS collector — WinRM connection failed on {0}" -f $c)
+      $error = Convert-AuditError -ErrorRecord $_ -Context "DNS collector on $c"
+      Write-Log Error ("DNS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Info ("Remediation: {0}" -f $error.Remediation)
       $out[$c] = @{ 
-        Error = "WinRM connection failed. Ensure WinRM is enabled and firewall allows port 5985/5986."
-        ErrorType = 'ConnectionFailure'
+        Error = $error.Message
+        ErrorType = $error.Category
+        ErrorDetails = $error.Remediation
       }
     } catch {
-      Write-Log Error ("DNS collector failed on {0} : {1}" -f $c, $_.Exception.Message)
-      $out[$c] = @{ Error = $_.Exception.Message }
+      $error = Convert-AuditError -ErrorRecord $_ -Context "DNS collector on $c"
+      Write-Log Error ("DNS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Info ("Remediation: {0}" -f $error.Remediation)
+      $out[$c] = @{ 
+        Error = $error.Message
+        ErrorType = $error.Category
+        ErrorDetails = $error.Remediation
+      }
     }
   }
   return $out
