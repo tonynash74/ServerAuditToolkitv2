@@ -1,8 +1,15 @@
 ﻿function Get-SATDNS {
   [CmdletBinding()]
   param(
+    [Parameter(Mandatory=$true)]
+    [ValidateNotNullOrEmpty()]
     [string[]]$ComputerName,
+
+    [Parameter(Mandatory=$true)]
+    [ValidateNotNull()]
     [hashtable]$Capability,
+
+    [Parameter(Mandatory=$false)]
     [System.Management.Automation.PSCredential]$Credential
   )
 

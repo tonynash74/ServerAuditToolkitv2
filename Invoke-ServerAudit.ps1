@@ -73,6 +73,7 @@ function Invoke-ServerAudit {
     param(
         [Parameter(Mandatory=$false, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
         [Alias('Name', 'Server')]
+        [ValidateNotNullOrEmpty()]
         [string[]]$ComputerName = @($env:COMPUTERNAME),
 
         [Parameter(Mandatory=$false)]
@@ -219,6 +220,16 @@ function Invoke-ServerAudit {
 
     process {
         # ====== STAGE 2: PROFILE & EXECUTE ======
+        
+        # Validate input parameters early
+        try {
+            Write-AuditLog "Validating input parameters..." -Level Verbose
+            Test-AuditParameters -ComputerName $ComputerName
+        } catch {
+            Write-AuditLog "Parameter validation failed: $_" -Level Error
+            throw
+        }
+        
         foreach ($server in $ComputerName) {
             Write-AuditLog "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -Level Information
             Write-AuditLog "Server: $server" -Level Information

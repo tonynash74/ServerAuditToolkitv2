@@ -40,6 +40,7 @@ function Get-ServerInfo-PS5 {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$false, ValueFromPipeline=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$ComputerName = $env:COMPUTERNAME,
 
         [Parameter(Mandatory=$false)]
