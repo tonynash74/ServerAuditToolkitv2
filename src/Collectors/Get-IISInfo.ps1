@@ -100,47 +100,63 @@ function Get-IISInfo {
                 $siteBindings = @()
 
                 foreach ($binding in $site.Bindings) {
+                    # ✅ CRITICAL FIX: Normalize COM object to hashtable for serialization
                     $siteBindings += @{
-                        Protocol    = $binding.Protocol
-                        BindingInfo = $binding.BindingInformation
+                        Protocol            = [string]($binding.Protocol)
+                        BindingInformation  = [string]($binding.BindingInformation)
+                        HostHeader          = [string]($binding.HostHeader)
+                        CertificateHash     = if ($binding.CertificateHash) { 
+                            [System.BitConverter]::ToString($binding.CertificateHash) 
+                        } else { 
+                            $null 
+                        }
+                        CertificateStoreName = [string]($binding.CertificateStoreName)
                     }
                 }
 
                 $appPools = @()
                 foreach ($pool in $site.Applications) {
+                    # ✅ Normalize virtual directory collection
+                    $physicalPath = if ($pool.VirtualDirectories.Count -gt 0) {
+                        [string]($pool.VirtualDirectories[0].PhysicalPath)
+                    } else {
+                        $null
+                    }
+                    
                     $appPools += @{
-                        AppName       = $pool.Path
-                        AppPoolName   = $pool.ApplicationPool
-                        PhysicalPath  = $pool.VirtualDirectories[0].PhysicalPath
+                        AppName       = [string]($pool.Path)
+                        AppPoolName   = [string]($pool.ApplicationPool)
+                        PhysicalPath  = $physicalPath
                     }
                 }
 
                 $sites += @{
-                    SiteName    = $site.Name
-                    SiteID      = $site.Id
-                    State       = $site.State
-                    Bindings    = $siteBindings
-                    AppPools    = $appPools
+                    SiteName    = [string]($site.Name)
+                    SiteID      = [int]($site.Id)
+                    State       = [string]($site.State)
+                    Bindings    = @($siteBindings)
+                    AppPools    = @($appPools)
                 }
             }
 
-            $iisData['Sites'] = $sites
+            $iisData['Sites'] = @($sites)
 
             # Get app pool info
             $appPools = @()
             foreach ($pool in $iisManager.ApplicationPoolCollection) {
+                # ✅ Normalize app pool COM object
                 $appPools += @{
-                    Name                 = $pool.Name
-                    State                = $pool.State
-                    RuntimeVersion       = $pool.ManagedRuntimeVersion
-                    PipelineMode         = $pool.ManagedPipelineMode
-                    IdentityType         = $pool.ProcessModel.IdentityType
-                    AutoStart            = $pool.AutoStart
-                    Enable32BitAppOn64Bit = $pool.Enable32BitAppOn64Bit
+                    Name                    = [string]($pool.Name)
+                    State                   = [string]($pool.State)
+                    RuntimeVersion          = [string]($pool.ManagedRuntimeVersion)
+                    PipelineMode            = [string]($pool.ManagedPipelineMode)
+                    IdentityType            = [string]($pool.ProcessModel.IdentityType)
+                    AutoStart               = [bool]($pool.AutoStart)
+                    Enable32BitAppOn64Bit   = [bool]($pool.Enable32BitAppOn64Bit)
                 }
             }
 
-            $iisData['AppPools'] = $appPools
+            $iisData['AppPools'] = @($appPools)
 
             # Get SSL certificate info
             $certInfo = @()
@@ -149,13 +165,14 @@ function Get-IISInfo {
                 $certs = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue
 
                 foreach ($cert in $certs) {
+                    # ✅ Normalize certificate object
                     $certInfo += @{
-                        Thumbprint   = $cert.Thumbprint
-                        Subject      = $cert.Subject
-                        Issuer       = $cert.Issuer
-                        NotBefore    = $cert.NotBefore
-                        NotAfter     = $cert.NotAfter
-                        FriendlyName = $cert.FriendlyName
+                        Thumbprint   = [string]($cert.Thumbprint)
+                        Subject      = [string]($cert.Subject)
+                        Issuer       = [string]($cert.Issuer)
+                        NotBefore    = [datetime]($cert.NotBefore)
+                        NotAfter     = [datetime]($cert.NotAfter)
+                        FriendlyName = [string]($cert.FriendlyName)
                     }
                 }
             }
@@ -163,7 +180,7 @@ function Get-IISInfo {
                 # Graceful fallback
             }
 
-            $iisData['Certificates'] = $certInfo
+            $iisData['Certificates'] = @($certInfo)
         }
         catch {
             # Fallback to WMI/registry if COM object unavailable
