@@ -1,10 +1,26 @@
-# Task T2: Server Performance Profiler
+# Task T2: Server Performance Profiler (Phase 3 Archive)
 
-## Overview
+**Status**: Integrated into Phase 3 enhancements  
+**Version**: v2.2.0-RC (Phase 3 supersedes T2)
 
-T2 introduces **adaptive parallelism** by profiling server capabilities and calculating safe job budgets.
+---
 
-After T1 detects *which* collectors are compatible, T2 determines *how many* collectors can run in parallel without overloading the server.
+## Overview (Historical)
+
+T2 introduced **adaptive parallelism** by profiling server capabilities and calculating safe job budgets.
+
+After T1 detected *which* collectors are compatible, T2 determined *how many* collectors could run in parallel without overloading the server.
+
+**Note**: T2 concepts are now integrated into Phase 3 (M-002 through M-009), with expanded capabilities:
+- M-002: PS7 parallelization (ForEach-Object -Parallel)
+- M-004: Metadata caching (enhanced)
+- M-008: Network resilience with session pooling
+- M-009: Resource monitoring with auto-throttling
+- M-010: Batch processing for 100+ servers
+
+See **PHASE-3-COMPLETION-SUMMARY.md** for current capabilities.
+
+---
 
 ## Files Delivered
 

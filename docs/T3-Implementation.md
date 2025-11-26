@@ -1,14 +1,33 @@
-# Task T3: Optimized Collector Registry & Loader
+# Task T3: Optimized Collector Registry & Loader (Phase 3 Archive)
 
-## Overview
+**Status**: Integrated into Phase 3 enhancements  
+**Version**: v2.2.0-RC (Phase 3 supersedes T3)
 
-T3 refactors `Invoke-ServerAudit.ps1` as a **three-stage orchestrator**:
+---
+
+## Overview (Historical)
+
+T3 refactored `Invoke-ServerAudit.ps1` as a **three-stage orchestrator**:
 
 1. **DISCOVER** (T1): Filter collectors by PS version + OS
 2. **PROFILE** (T2): Profile server capabilities and determine parallelism
 3. **EXECUTE** (T3): Run collectors with adaptive parallelism and timeout management
 
-## Three-Stage Execution Model
+**Note**: T3 concepts are now integrated into Phase 3 (M-001 through M-011), with major enhancements:
+- M-001: Structured logging (JSON, rotation)
+- M-002: PS7 parallelization (ForEach-Object -Parallel)
+- M-003: 3-tier fallback strategy
+- M-004: Metadata caching (5-min TTL)
+- M-005: Performance profiling with Gantt charts
+- M-006: Configuration management
+- M-007-M-009: Resilience, networking, resources
+- M-010-M-011: Batch processing, error dashboard
+
+See **PHASE-3-COMPLETION-SUMMARY.md** for current capabilities.
+
+---
+
+## Three-Stage Execution Model (Historical)
 
 ### Stage 1: DISCOVER
 ```

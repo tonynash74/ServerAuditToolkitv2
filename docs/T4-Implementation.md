@@ -1,10 +1,26 @@
-# Task T4: PS 5.1+ and PS 7.x Optimized Collectors
+# Task T4: PS 5.1+ and PS 7.x Optimized Collectors (Phase 3 Archive)
 
-## Overview
+**Status**: Integrated into Phase 3 enhancements  
+**Version**: v2.2.0-RC (Phase 3 supersedes T4)
 
-T4 creates **modern collector variants** that leverage PowerShell 5.1+ features for better performance, reliability, and maintainability.
+---
 
-## Key Optimizations
+## Overview (Historical)
+
+T4 created **modern collector variants** that leveraged PowerShell 5.1+ features for better performance, reliability, and maintainability.
+
+**Note**: T4 concepts are now integrated into Phase 3 with full modernization:
+- M-002: PS7 parallelization using ForEach-Object -Parallel
+- M-003: CIM/WMI 3-tier fallback strategy
+- M-004: Metadata caching for faster retrieval
+- M-005: Performance profiling with modern output formats
+- All collectors now support PS 2.0 through PS 7.x with optimized variants
+
+See **PHASE-3-COMPLETION-SUMMARY.md** for current capabilities and **docs/API-REFERENCE.md** for integration patterns.
+
+---
+
+## Key Optimizations (Historical)
 
 ### Get-CimInstance vs. Get-WmiObject
 - **Speed**: 3-5x faster due to DCOM protocol optimization
