@@ -131,26 +131,49 @@ function Get-ServerInfo-PS5 {
                 throw "Get-CimInstance not available; this should use PS2 variant"
             }
         } catch {
-            $result.Errors += "OS collection failed: $_"
+            $result.Errors += "CIM collection failed: $_"
             $result.Warnings += "Falling back to WMI for OS data"
 
-            $osData = Get-WmiObject -Class Win32_OperatingSystem @wmiParams | Select-Object -First 1
-            $result.Data.OperatingSystem = @{
-                ComputerName          = $osData.CSName
-                OSName                = $osData.Caption
-                Version               = $osData.Version
-                BuildNumber           = $osData.BuildNumber
-                OSArchitecture        = if ($osData.OSArchitecture) { $osData.OSArchitecture } else { 'Unknown' }
-                InstallDate           = $osData.ConvertToDateTime($osData.InstallDate)
-                LastBootUpTime        = $osData.ConvertToDateTime($osData.LastBootUpTime)
-                SystemUptime          = if ($osData.LastBootUpTime) {
-                    [Math]::Round(((Get-Date) - $osData.ConvertToDateTime($osData.LastBootUpTime)).TotalDays, 2)
-                } else { 0 }
-                TotalVisibleMemorySize = [Math]::Round($osData.TotalVisibleMemorySize / 1024 / 1024, 2)
-                FreePhysicalMemory    = [Math]::Round($osData.FreePhysicalMemory / 1024 / 1024, 2)
-                Manufacturer          = $osData.Manufacturer
-                SystemDirectory       = $osData.SystemDirectory
-                WindowsDirectory      = $osData.WindowsDirectory
+            try {
+                $osData = Get-WmiObject -Class Win32_OperatingSystem @wmiParams | Select-Object -First 1
+                
+                # Helper function to safely convert WMI dates
+                function ConvertWmiDate {
+                    param([string]$WmiDate)
+                    if ([string]::IsNullOrEmpty($WmiDate)) { return $null }
+                    try {
+                        return [System.Management.ManagementDateTimeConverter]::ToDateTime($WmiDate)
+                    } catch {
+                        return $null
+                    }
+                }
+                
+                $result.Data.OperatingSystem = @{
+                    ComputerName          = $osData.CSName
+                    OSName                = $osData.Caption
+                    Version               = $osData.Version
+                    BuildNumber           = $osData.BuildNumber
+                    OSArchitecture        = if ($osData.OSArchitecture) { $osData.OSArchitecture } else { 'Unknown' }
+                    InstallDate           = ConvertWmiDate $osData.InstallDate
+                    LastBootUpTime        = ConvertWmiDate $osData.LastBootUpTime
+                    SystemUptime          = $(
+                        $lastBoot = ConvertWmiDate $osData.LastBootUpTime
+                        if ($lastBoot) {
+                            [Math]::Round(((Get-Date) - $lastBoot).TotalDays, 2)
+                        } else { 
+                            0 
+                        }
+                    )
+                    TotalVisibleMemorySize = [Math]::Round($osData.TotalVisibleMemorySize / 1024 / 1024, 2)
+                    FreePhysicalMemory    = [Math]::Round($osData.FreePhysicalMemory / 1024 / 1024, 2)
+                    Manufacturer          = $osData.Manufacturer
+                    SystemDirectory       = $osData.SystemDirectory
+                    WindowsDirectory      = $osData.WindowsDirectory
+                }
+                $result.Success = $true
+            } catch {
+                $result.Errors += "WMI fallback also failed: $_"
+                $result.Success = $false
             }
         }
 
