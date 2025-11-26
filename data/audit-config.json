@@ -317,7 +317,15 @@
     "outputPath": "./audit_results",
     "prettyPrint": true,
     "includeMetadata": true,
-    "includeExecutionTimings": true
+    "includeExecutionTimings": true,
+    "streaming": {
+      "streamResults": false,
+      "bufferSize": 10,
+      "flushIntervalSeconds": 30,
+      "enableMemoryMonitoring": false,
+      "memoryThresholdMB": 200,
+      "outputDirectory": "streaming"
+    }
   },
   "logging": {
     "enabled": true,

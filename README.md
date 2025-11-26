@@ -41,6 +41,7 @@
 - **Phase 3 Enhancements** (11/14 complete, 93%) — Structured logging, batch processing (100+ servers), network resilience, health diagnostics
 - **TIER 6: Document Link Analysis Engine** — Extract links from Word/Excel/PowerPoint/PDF + validate with risk scoring
 - **Version-optimized collectors** — PS 5.1+ CIM-based (3-5x faster), PS 7.x parallel-ready with 90% memory reduction
+- **M-012 Streaming output** — JSONL writer, 90% peak memory reduction, streaming consolidation utilities
 - **Zero-trust networking** — WinRM-based remote scanning, no stored credentials, DNS retry + session pooling
 - **Intelligent execution** — Auto-detected parallelism, resource-aware throttling, per-collector timeouts
 - **Rich reporting** — JSON (canonical), CSV, HTML exports, performance profiling, error dashboard, health diagnostics
@@ -94,6 +95,24 @@ $results = .\Invoke-ServerAudit.ps1 -ComputerName "SERVER01", "SERVER02", "SERVE
 
 # View summary
 $results.Servers | Select-Object ComputerName, Success, StartTime, EndTime
+```
+
+### Stream Large Audits (100+ Servers)
+
+```powershell
+# Enable M-012 streaming to keep memory under 100MB
+$results = .\Invoke-ServerAudit.ps1 `
+  -ComputerName $bigList `
+  -UseBatchProcessing `
+  -EnableStreaming `
+  -StreamBufferSize 10 `
+  -StreamFlushIntervalSeconds 30
+
+# Results are written to JSONL incrementally
+$results.Streaming.StreamFile | Get-Item | Select-Object FullName, Length
+
+# Hydrate individual records on demand
+$top10 = Read-StreamedResults -StreamFile $results.Streaming.StreamFile -MaxResults 10
 ```
 
 ### Document Link Analysis (NEW - T3 Engine)

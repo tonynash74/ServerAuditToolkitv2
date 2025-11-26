@@ -90,6 +90,36 @@
     Uses runspace pools for parallel execution (PS3+); sequential on PS 2.0.
 #>
 
+function Update-AuditSummaryCounters {
+    param(
+        [hashtable]$Counters,
+        [pscustomobject]$ServerResult
+    )
+
+    if (-not $Counters -or -not $ServerResult) {
+        return
+    }
+
+    $Counters.TotalServers++
+
+    if ($ServerResult.Success) {
+        $Counters.SuccessfulServers++
+    }
+    else {
+        $Counters.FailedServers++
+    }
+
+    if ($ServerResult.CollectorsSummary) {
+        $Counters.TotalCollectorsExecuted  += [int]($ServerResult.CollectorsSummary.Executed)
+        $Counters.TotalCollectorsSucceeded += [int]($ServerResult.CollectorsSummary.Succeeded)
+        $Counters.TotalCollectorsFailed    += [int]($ServerResult.CollectorsSummary.Failed)
+    }
+
+    if ($ServerResult.ExecutionTimeSeconds) {
+        $Counters.TotalExecutionTimeSeconds += [double]$ServerResult.ExecutionTimeSeconds
+    }
+}
+
 function Invoke-ServerAudit {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
@@ -141,7 +171,29 @@ function Invoke-ServerAudit {
         [int]$CheckpointInterval = 5,
 
         [Parameter(Mandatory=$false)]
-        [string]$BatchOutputPath
+        [string]$BatchOutputPath,
+
+        # M-012: Streaming output
+        [Parameter(Mandatory=$false)]
+        [switch]$EnableStreaming,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateRange(1, 100)]
+        [int]$StreamBufferSize = 10,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateRange(5, 300)]
+        [int]$StreamFlushIntervalSeconds = 30,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$EnableStreamingMemoryMonitoring,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateRange(50, 1000)]
+        [int]$StreamingMemoryThresholdMB = 200,
+
+        [Parameter(Mandatory=$false)]
+        [string]$StreamOutputPath
     )
 
     begin {
@@ -162,6 +214,16 @@ function Invoke-ServerAudit {
                 PerformanceProfiles = @()
                 Summary             = @{}
             }
+            SummaryCounters        = @{
+                TotalServers                = 0
+                SuccessfulServers           = 0
+                FailedServers               = 0
+                TotalCollectorsExecuted     = 0
+                TotalCollectorsSucceeded    = 0
+                TotalCollectorsFailed       = 0
+                TotalExecutionTimeSeconds   = 0
+            }
+            StreamingWriter        = $null
         }
 
         # Setup logging
@@ -223,6 +285,94 @@ function Invoke-ServerAudit {
                 Write-AuditLog "Created output directory: $OutputPath" -Level Verbose
             } catch {
                 Write-AuditLog "Failed to create output directory: $_" -Level Error
+                throw
+            }
+        }
+
+        # Configure streaming output
+        $streamingConfig = $null
+        if ($config -and $config.output -and $config.output.streaming) {
+            $streamingConfig = $config.output.streaming
+        }
+        $streamingEnabled = if ($PSBoundParameters.ContainsKey('EnableStreaming')) {
+            [bool]$EnableStreaming
+        } elseif ($streamingConfig) {
+            [bool]$streamingConfig.streamResults
+        } else {
+            $false
+        }
+
+        $effectiveStreamBufferSize = if ($PSBoundParameters.ContainsKey('StreamBufferSize')) {
+            $StreamBufferSize
+        } elseif ($streamingConfig -and $streamingConfig.bufferSize) {
+            [int]$streamingConfig.bufferSize
+        } else {
+            10
+        }
+
+        $effectiveStreamFlushSeconds = if ($PSBoundParameters.ContainsKey('StreamFlushIntervalSeconds')) {
+            $StreamFlushIntervalSeconds
+        } elseif ($streamingConfig -and $streamingConfig.flushIntervalSeconds) {
+            [int]$streamingConfig.flushIntervalSeconds
+        } else {
+            30
+        }
+
+        $effectiveMemoryMonitoring = if ($PSBoundParameters.ContainsKey('EnableStreamingMemoryMonitoring')) {
+            [bool]$EnableStreamingMemoryMonitoring
+        } elseif ($streamingConfig) {
+            [bool]$streamingConfig.enableMemoryMonitoring
+        } else {
+            $false
+        }
+
+        $effectiveMemoryThresholdMB = if ($PSBoundParameters.ContainsKey('StreamingMemoryThresholdMB')) {
+            $StreamingMemoryThresholdMB
+        } elseif ($streamingConfig -and $streamingConfig.memoryThresholdMB) {
+            [int]$streamingConfig.memoryThresholdMB
+        } else {
+            200
+        }
+
+        $effectiveStreamOutputPath = if ($PSBoundParameters.ContainsKey('StreamOutputPath') -and -not [string]::IsNullOrEmpty($StreamOutputPath)) {
+            $StreamOutputPath
+        } elseif ($streamingConfig -and $streamingConfig.outputDirectory) {
+            $streamingConfig.outputDirectory
+        } else {
+            Join-Path -Path $OutputPath -ChildPath 'streaming'
+        }
+
+        if (-not [System.IO.Path]::IsPathRooted($effectiveStreamOutputPath)) {
+            $effectiveStreamOutputPath = Join-Path -Path $OutputPath -ChildPath $effectiveStreamOutputPath
+        }
+
+        if ($streamingEnabled) {
+            if (-not (Test-Path -LiteralPath $effectiveStreamOutputPath)) {
+                [void](New-Item -ItemType Directory -Path $effectiveStreamOutputPath -Force -ErrorAction Stop)
+                Write-AuditLog "Created streaming output directory: $effectiveStreamOutputPath" -Level Verbose
+            }
+
+            try {
+                $auditSession.StreamingWriter = New-StreamingOutputWriter `
+                    -OutputPath $effectiveStreamOutputPath `
+                    -BufferSize $effectiveStreamBufferSize `
+                    -FlushIntervalSeconds $effectiveStreamFlushSeconds `
+                    -EnableMemoryMonitoring:$effectiveMemoryMonitoring `
+                    -MemoryThresholdMB $effectiveMemoryThresholdMB
+
+                $auditSession.AuditResults.Streaming = @{
+                    Enabled              = $true
+                    StreamFile           = $auditSession.StreamingWriter.StreamFile
+                    OutputPath           = $effectiveStreamOutputPath
+                    BufferSize           = $effectiveStreamBufferSize
+                    FlushIntervalSeconds = $effectiveStreamFlushSeconds
+                    MemoryMonitoring     = $effectiveMemoryMonitoring
+                }
+
+                Write-AuditLog "M-012: Streaming output enabled (buffer=$effectiveStreamBufferSize, flush=${effectiveStreamFlushSeconds}s)" -Level Information
+            }
+            catch {
+                Write-AuditLog "Failed to initialize streaming output: $_" -Level Error
                 throw
             }
         }
@@ -304,25 +454,89 @@ function Invoke-ServerAudit {
                     [void](New-Item -ItemType Directory -Path $BatchOutputPath -Force -ErrorAction Stop)
                     Write-AuditLog "Created batch output directory: $BatchOutputPath" -Level Verbose
                 }
+
+                $batchResultCallback = $null
+                $callbackWriter = $auditSession.StreamingWriter
+                $callbackCounters = $auditSession.SummaryCounters
+                if ($callbackWriter) {
+                    $batchResultCallback = {
+                        param($batchData)
+
+                        if (-not $batchData -or -not $batchData.Results) {
+                            return
+                        }
+
+                        foreach ($serverResult in $batchData.Results) {
+                            if (-not $serverResult) { continue }
+                            $null = $callbackWriter.AddResult($serverResult)
+                            Update-AuditSummaryCounters -Counters $callbackCounters -ServerResult $serverResult
+                        }
+
+                        # Release batch memory once streamed
+                        $batchData.Results = @()
+                    }
+                }
                 
                 # Execute batch audit
-                $batchResults = Invoke-BatchAudit `
-                    -Servers $ComputerName `
-                    -Collectors $auditSession.CompatibleCollectors `
-                    -BatchSize $BatchSize `
-                    -PipelineDepth $PipelineDepth `
-                    -CheckpointInterval $CheckpointInterval `
-                    -OutputPath $BatchOutputPath `
-                    -ErrorAction Stop
+                $batchParams = @{
+                    Servers            = $ComputerName
+                    Collectors         = $auditSession.CompatibleCollectors
+                    BatchSize          = $BatchSize
+                    PipelineDepth      = $PipelineDepth
+                    CheckpointInterval = $CheckpointInterval
+                    OutputPath         = $BatchOutputPath
+                    ErrorAction        = 'Stop'
+                }
+
+                if ($batchResultCallback) {
+                    $batchParams.ResultCallback = $batchResultCallback
+                }
+
+                $batchResults = Invoke-BatchAudit @batchParams
                 
                 # Store batch results
                 if ($batchResults) {
                     $auditSession.BatchResults = $batchResults
                     Write-AuditLog "Batch processing complete: $($batchResults.TotalBatches) batches, $($batchResults.SuccessfulBatches) successful" -Level Information
-                    
+
                     if ($batchResults.BatchResults) {
-                        $auditSession.AuditResults.Servers += $batchResults.BatchResults
+                        foreach ($batch in $batchResults.BatchResults) {
+                            if (-not $batch.Results) { continue }
+                            foreach ($serverResult in $batch.Results) {
+                                if ($auditSession.StreamingWriter -and -not $batchResultCallback) {
+                                    $null = $auditSession.StreamingWriter.AddResult($serverResult)
+                                }
+                                elseif (-not $auditSession.StreamingWriter) {
+                                    $auditSession.AuditResults.Servers += $serverResult
+                                }
+
+                                if (-not $batchResultCallback) {
+                                    Update-AuditSummaryCounters -Counters $auditSession.SummaryCounters -ServerResult $serverResult
+                                }
+                            }
+
+                            if ($auditSession.StreamingWriter) {
+                                $batch.Results = @()
+                            }
+                        }
                     }
+                }
+
+                if ($auditSession.StreamingWriter -and -not $auditSession.StreamingWriter.IsFinalized) {
+                    $streamFilePath = $auditSession.StreamingWriter.Finalize()
+                    $auditSession.AuditResults.Streaming.StreamFile = $streamFilePath
+                    $auditSession.AuditResults.Streaming.Statistics = $auditSession.StreamingWriter.GetStatistics()
+                }
+
+                $auditSession.AuditResults.Summary = @{
+                    TotalServers             = $auditSession.SummaryCounters.TotalServers
+                    SuccessfulServers        = $auditSession.SummaryCounters.SuccessfulServers
+                    FailedServers            = $auditSession.SummaryCounters.FailedServers
+                    TotalCollectorsExecuted  = $auditSession.SummaryCounters.TotalCollectorsExecuted
+                    TotalCollectorsSucceeded = $auditSession.SummaryCounters.TotalCollectorsSucceeded
+                    TotalCollectorsFailed    = $auditSession.SummaryCounters.TotalCollectorsFailed
+                    AverageFetchTimeSeconds  = if ($auditSession.SummaryCounters.TotalServers -gt 0) { [Math]::Round($auditSession.SummaryCounters.TotalExecutionTimeSeconds / $auditSession.SummaryCounters.TotalServers, 2) } else { 0 }
+                    DurationSeconds          = [Math]::Round(((Get-Date) - $auditSession.StartTime).TotalSeconds, 2)
                 }
                 
                 return $auditSession.AuditResults
@@ -510,8 +724,15 @@ function Invoke-ServerAudit {
                 $serverResults.ExecutionTimeSeconds = [Math]::Round($serverStopwatch.Elapsed.TotalSeconds, 2)
             }
 
-            # Add to audit results
-            $auditSession.AuditResults.Servers += $serverResults
+            # Add to audit results / stream
+            Update-AuditSummaryCounters -Counters $auditSession.SummaryCounters -ServerResult $serverResults
+
+            if ($auditSession.StreamingWriter) {
+                $null = $auditSession.StreamingWriter.AddResult($serverResults)
+            }
+            else {
+                $auditSession.AuditResults.Servers += $serverResults
+            }
             
             Write-AuditLog "Server audit complete in $($serverResults.ExecutionTimeSeconds)s: $($serverResults.CollectorsSummary.Succeeded)/$($serverResults.CollectorsSummary.Total) collectors succeeded" -Level Information
         }
@@ -522,16 +743,49 @@ function Invoke-ServerAudit {
         Write-AuditLog "STAGE 3: FINALIZE (Aggregate Results)" -Level Information
 
         try {
+            if ($auditSession.StreamingWriter -and -not $auditSession.StreamingWriter.IsFinalized) {
+                $streamFilePath = $auditSession.StreamingWriter.Finalize()
+                $auditSession.AuditResults.Streaming.StreamFile = $streamFilePath
+                $auditSession.AuditResults.Streaming.Statistics = $auditSession.StreamingWriter.GetStatistics()
+            }
+
             # Calculate summary statistics
-            $auditSession.AuditResults.Summary = @{
-                TotalServers             = $auditSession.AuditResults.Servers.Count
-                SuccessfulServers        = ($auditSession.AuditResults.Servers | Where-Object { $_.Success }).Count
-                FailedServers            = ($auditSession.AuditResults.Servers | Where-Object { -not $_.Success }).Count
-                TotalCollectorsExecuted  = ($auditSession.AuditResults.Servers | ForEach-Object { $_.CollectorsSummary.Executed } | Measure-Object -Sum).Sum
-                TotalCollectorsSucceeded = ($auditSession.AuditResults.Servers | ForEach-Object { $_.CollectorsSummary.Succeeded } | Measure-Object -Sum).Sum
-                TotalCollectorsFailed    = ($auditSession.AuditResults.Servers | ForEach-Object { $_.CollectorsSummary.Failed } | Measure-Object -Sum).Sum
-                AverageFetchTimeSeconds  = [Math]::Round(($auditSession.AuditResults.Servers | ForEach-Object { $_.ExecutionTimeSeconds } | Measure-Object -Average).Average, 2)
-                DurationSeconds          = [Math]::Round(((Get-Date) - $auditSession.StartTime).TotalSeconds, 2)
+            $serverCollection = $auditSession.AuditResults.Servers
+            if ($serverCollection.Count -gt 0) {
+                $auditSession.AuditResults.Summary = @{
+                    TotalServers             = $serverCollection.Count
+                    SuccessfulServers        = ($serverCollection | Where-Object { $_.Success }).Count
+                    FailedServers            = ($serverCollection | Where-Object { -not $_.Success }).Count
+                    TotalCollectorsExecuted  = ($serverCollection | ForEach-Object { $_.CollectorsSummary.Executed } | Measure-Object -Sum).Sum
+                    TotalCollectorsSucceeded = ($serverCollection | ForEach-Object { $_.CollectorsSummary.Succeeded } | Measure-Object -Sum).Sum
+                    TotalCollectorsFailed    = ($serverCollection | ForEach-Object { $_.CollectorsSummary.Failed } | Measure-Object -Sum).Sum
+                    AverageFetchTimeSeconds  = [Math]::Round(($serverCollection | ForEach-Object { $_.ExecutionTimeSeconds } | Measure-Object -Average).Average, 2)
+                    DurationSeconds          = [Math]::Round(((Get-Date) - $auditSession.StartTime).TotalSeconds, 2)
+                }
+            }
+            elseif ($auditSession.SummaryCounters.TotalServers -gt 0) {
+                $auditSession.AuditResults.Summary = @{
+                    TotalServers             = $auditSession.SummaryCounters.TotalServers
+                    SuccessfulServers        = $auditSession.SummaryCounters.SuccessfulServers
+                    FailedServers            = $auditSession.SummaryCounters.FailedServers
+                    TotalCollectorsExecuted  = $auditSession.SummaryCounters.TotalCollectorsExecuted
+                    TotalCollectorsSucceeded = $auditSession.SummaryCounters.TotalCollectorsSucceeded
+                    TotalCollectorsFailed    = $auditSession.SummaryCounters.TotalCollectorsFailed
+                    AverageFetchTimeSeconds  = if ($auditSession.SummaryCounters.TotalServers -gt 0) { [Math]::Round($auditSession.SummaryCounters.TotalExecutionTimeSeconds / $auditSession.SummaryCounters.TotalServers, 2) } else { 0 }
+                    DurationSeconds          = [Math]::Round(((Get-Date) - $auditSession.StartTime).TotalSeconds, 2)
+                }
+            }
+            else {
+                $auditSession.AuditResults.Summary = @{
+                    TotalServers             = 0
+                    SuccessfulServers        = 0
+                    FailedServers            = 0
+                    TotalCollectorsExecuted  = 0
+                    TotalCollectorsSucceeded = 0
+                    TotalCollectorsFailed    = 0
+                    AverageFetchTimeSeconds  = 0
+                    DurationSeconds          = [Math]::Round(((Get-Date) - $auditSession.StartTime).TotalSeconds, 2)
+                }
             }
 
             # Export results

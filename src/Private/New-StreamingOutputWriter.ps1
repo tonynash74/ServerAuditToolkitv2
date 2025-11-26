@@ -1,441 +1,461 @@
 <#
 .SYNOPSIS
-    Provides streaming output functionality for large audit operations to reduce memory footprint.
+    Streaming output helpers for large audit runs (M-012).
 
 .DESCRIPTION
-    M-012: Output Streaming & Memory Reduction
-    
-    Replaces in-memory result buffering with file-based streaming for large-scale audits.
-    Instead of holding all collector results in RAM, streams results to disk as they complete,
-    dramatically reducing peak memory usage from 500MB+ to 50-100MB for 100+ server environments.
-    
-    Key Features:
-    - Progressive file output: Results written immediately upon collection completion
-    - Batch-aware streaming: Optimized for M-010 batch processing pipeline
-    - Memory monitoring: Tracks and dynamically adjusts buffering strategy
-    - Backwards compatible: Still returns in-memory results for PS pipeline
-    - Configurable: Enable/disable via config or parameters
-    
-.EXAMPLE
-    # Enable streaming for large batch audit (100+ servers)
-    $results = Invoke-ServerAudit -ComputerName $servers -UseBatchProcessing -EnableStreaming
-    # Results written to disk immediately, memory stays <50MB
-    
-.EXAMPLE
-    # Monitor memory during streaming operation
-    $streamWriter = New-StreamingOutputWriter -OutputPath $path -EnableMemoryMonitoring
-    # Will auto-adjust buffering if memory usage exceeds 80% threshold
+    Provides the streaming writer used by Invoke-ServerAudit along with
+    reader and consolidation utilities that operate on JSONL output.
+    The writer keeps memory usage low by flushing JSON payloads to disk
+    and optionally monitoring process memory to auto-throttle buffers.
 #>
 
-<# STREAMING OUTPUT WRITER #>
-function New-StreamingOutputWriter {
-    <#
-    .SYNOPSIS
-        Creates a streaming output writer for progressive result persistence.
-    
-    .DESCRIPTION
-        Initializes a streaming writer that buffers collector results and periodically flushes to disk.
-        Designed for large audits where holding all results in memory is prohibitive.
-        
-        Provides memory-efficient JSON streaming with configurable flush intervals.
-    
-    .PARAMETER OutputPath
-        Directory where streaming output files will be written.
-    
-    .PARAMETER BufferSize
-        Number of results to buffer before flushing to disk. Default: 10.
-        Smaller = more frequent I/O but lower peak memory.
-        Larger = fewer I/O operations but higher peak memory.
-    
-    .PARAMETER FlushIntervalSeconds
-        Force flush to disk even if buffer not full, after this interval. Default: 30 seconds.
-    
-    .PARAMETER EnableMemoryMonitoring
-        If $true, monitors memory usage and auto-adjusts buffer size. Default: $false.
-    
-    .PARAMETER MemoryThresholdMB
-        Auto-reduce buffer when process memory exceeds this (MB). Default: 200 MB.
-    
-    .OUTPUTS
-        [PSCustomObject] Streaming writer instance with methods:
-        - AddResult($result): Add collector result to stream
-        - Flush(): Force immediate flush to disk
-        - Finalize(): Flush all remaining results and close stream
-        - GetStatistics(): Return memory and I/O statistics
-    #>
-    param(
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$OutputPath,
-        
-        [Parameter(Mandatory=$false)]
-        [ValidateRange(1, 100)]
-        [int]$BufferSize = 10,
-        
-        [Parameter(Mandatory=$false)]
-        [ValidateRange(5, 300)]
-        [int]$FlushIntervalSeconds = 30,
-        
-        [Parameter(Mandatory=$false)]
-        [bool]$EnableMemoryMonitoring = $false,
-        
-        [Parameter(Mandatory=$false)]
-        [ValidateRange(50, 1000)]
-        [int]$MemoryThresholdMB = 200
-    )
-    
-    # Create output directory if needed
-    if (-not (Test-Path $OutputPath)) {
-        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
-    }
-    
-    $streamingWriter = [PSCustomObject]@{
-        OutputPath = $OutputPath
-        BufferSize = $BufferSize
-        OriginalBufferSize = $BufferSize
-        FlushIntervalSeconds = $FlushIntervalSeconds
-        EnableMemoryMonitoring = $EnableMemoryMonitoring
-        MemoryThresholdMB = $MemoryThresholdMB
-        
-        # Internal state
-        ResultBuffer = @()
-        StreamFile = $null
-        StreamWriter = $null
-        LastFlushTime = (Get-Date)
-        TotalResultsWritten = 0
-        TotalFlushes = 0
-        PeakMemoryMB = 0
-        IsFinalized = $false
-        
-        # Statistics
-        StartTime = (Get-Date)
-        ResultsPerSecond = 0
-        LastStatisticUpdate = (Get-Date)
-    }
-    
-    # Initialize streaming file
-    $timestamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
-    $streamingWriter.StreamFile = Join-Path $OutputPath "stream_$timestamp.jsonl"
-    $streamingWriter.StreamWriter = [System.IO.StreamWriter]::new($streamingWriter.StreamFile, $true, [System.Text.Encoding]::UTF8)
-    
-    # Add methods
-    $streamingWriter | Add-Member -MemberType ScriptMethod -Name "AddResult" -Value {
-        param([PSCustomObject]$Result)
-        
-        if ($this.IsFinalized) {
-            throw "Streaming writer has been finalized. Cannot add more results."
+class StreamingOutputWriter {
+    [string]$OutputPath
+    [int]$BufferSize
+    [int]$OriginalBufferSize
+    [int]$FlushIntervalSeconds
+    [bool]$EnableMemoryMonitoring
+    [int]$MemoryThresholdMB
+    [System.Collections.Generic.List[psobject]]$ResultBuffer
+    [int]$TotalResultsWritten
+    [int]$TotalFlushes
+    [datetime]$LastFlushTime
+    [bool]$IsFinalized
+    [System.IO.StreamWriter]$StreamWriter
+    [string]$StreamFile
+    [double]$PeakMemoryMB
+    [datetime]$StartTime
+    [double]$ResultsPerSecond
+    [System.Diagnostics.Stopwatch]$Stopwatch
+
+    StreamingOutputWriter(
+        [string]$outputPath,
+        [int]$bufferSize,
+        [int]$flushIntervalSeconds,
+        [bool]$enableMemoryMonitoring,
+        [int]$memoryThresholdMB
+    ) {
+        if (-not (Test-Path -LiteralPath $outputPath)) {
+            New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
         }
-        
-        # Add result to buffer
-        $this.ResultBuffer += $Result
-        
-        # Check if flush needed (buffer full or time interval elapsed)
-        $timeSinceLastFlush = ((Get-Date) - $this.LastFlushTime).TotalSeconds
-        if ($this.ResultBuffer.Count -ge $this.BufferSize -or $timeSinceLastFlush -gt $this.FlushIntervalSeconds) {
+
+        $this.OutputPath = (Resolve-Path -LiteralPath $outputPath).Path
+        $this.BufferSize = $bufferSize
+        $this.OriginalBufferSize = $bufferSize
+        $this.FlushIntervalSeconds = $flushIntervalSeconds
+        $this.EnableMemoryMonitoring = $enableMemoryMonitoring
+        $this.MemoryThresholdMB = $memoryThresholdMB
+        $this.ResultBuffer = New-Object System.Collections.Generic.List[psobject]
+        $this.TotalResultsWritten = 0
+        $this.TotalFlushes = 0
+        $this.LastFlushTime = Get-Date
+        $this.IsFinalized = $false
+        $this.PeakMemoryMB = 0
+        $this.StartTime = Get-Date
+        $this.ResultsPerSecond = 0
+        $this.Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+        $timestamp = '{0:yyyyMMdd-HHmmss-fff}-{1}' -f (Get-Date), (Get-Random -Maximum 10000)
+        $this.StreamFile = Join-Path $this.OutputPath "stream_$timestamp.jsonl"
+        $this.StreamWriter = [System.IO.StreamWriter]::new($this.StreamFile, $true, [System.Text.Encoding]::UTF8)
+    }
+
+    [void] AddResult([psobject]$Result) {
+        if ($this.IsFinalized) {
+            throw 'finalized'
+        }
+
+        if ($null -eq $Result) {
+            return
+        }
+
+        $this.ResultBuffer.Add($Result)
+
+        $shouldFlush = $this.ResultBuffer.Count -ge $this.BufferSize
+        if (-not $shouldFlush -and $this.FlushIntervalSeconds -gt 0) {
+            $elapsed = ((Get-Date) - $this.LastFlushTime).TotalSeconds
+            $shouldFlush = $elapsed -ge $this.FlushIntervalSeconds
+        }
+
+        if ($shouldFlush) {
             $this.Flush()
         }
-        
-        # Monitor memory if enabled
+
         if ($this.EnableMemoryMonitoring) {
             $currentMemoryMB = [System.Diagnostics.Process]::GetCurrentProcess().WorkingSet64 / 1MB
             if ($currentMemoryMB -gt $this.PeakMemoryMB) {
                 $this.PeakMemoryMB = $currentMemoryMB
             }
-            
-            # Auto-reduce buffer if memory pressure detected
+
             if ($currentMemoryMB -gt $this.MemoryThresholdMB -and $this.BufferSize -gt 1) {
                 $this.BufferSize = [Math]::Max(1, [Math]::Floor($this.BufferSize * 0.5))
-                Write-Host "[MEMORY] Reduced buffer size to $($this.BufferSize) (Memory: $currentMemoryMB MB)" -ForegroundColor Yellow
+                Write-Host "[MEMORY] Reduced buffer size to $($this.BufferSize) (Memory: $([math]::Round($currentMemoryMB, 2)) MB)" -ForegroundColor Yellow
             }
         }
     }
-    
-    $streamingWriter | Add-Member -MemberType ScriptMethod -Name "Flush" -Value {
+
+    [void] Flush() {
         if ($this.ResultBuffer.Count -eq 0) {
             return
         }
-        
-        # Write buffered results to JSONL (one JSON object per line)
+
         foreach ($result in $this.ResultBuffer) {
-            $json = $result | ConvertTo-Json -Compress
+            $json = $result | ConvertTo-Json -Depth 20 -Compress
             $this.StreamWriter.WriteLine($json)
         }
-        
+
         $this.StreamWriter.Flush()
         $this.TotalResultsWritten += $this.ResultBuffer.Count
         $this.TotalFlushes++
         $this.LastFlushTime = Get-Date
-        $this.ResultBuffer = @()
-        
-        # Update statistics
-        $elapsed = ((Get-Date) - $this.StartTime).TotalSeconds
-        $this.ResultsPerSecond = if ($elapsed -gt 0) { $this.TotalResultsWritten / $elapsed } else { 0 }
-    }
-    
-    $streamingWriter | Add-Member -MemberType ScriptMethod -Name "Finalize" -Value {
-        if ($this.IsFinalized) {
-            return
+        $this.ResultBuffer.Clear()
+
+        $elapsed = $this.Stopwatch.Elapsed.TotalSeconds
+        if ($elapsed -gt 0) {
+            $this.ResultsPerSecond = $this.TotalResultsWritten / $elapsed
         }
-        
-        # Flush any remaining results
+    }
+
+    [string] Finalize() {
+        if ($this.IsFinalized) {
+            return $this.StreamFile
+        }
+
         if ($this.ResultBuffer.Count -gt 0) {
             $this.Flush()
         }
-        
-        # Close stream
+
         if ($this.StreamWriter) {
             $this.StreamWriter.Close()
             $this.StreamWriter.Dispose()
         }
-        
+
+        if ($this.Stopwatch) {
+            $this.Stopwatch.Stop()
+        }
+
         $this.IsFinalized = $true
-        
-        # Return path to results file for downstream processing
         return $this.StreamFile
     }
-    
-    $streamingWriter | Add-Member -MemberType ScriptMethod -Name "GetStatistics" -Value {
+
+    [pscustomobject] GetStatistics() {
+        $elapsedSeconds = $this.Stopwatch.Elapsed.TotalSeconds
+        if ($elapsedSeconds -lt 0.01) {
+            $elapsedSeconds = 0.01
+        }
+
+        $calculatedResultsPerSecond = 0
+        if ($elapsedSeconds -gt 0 -and $this.TotalResultsWritten -gt 0) {
+            $calculatedResultsPerSecond = $this.TotalResultsWritten / $elapsedSeconds
+        }
+
         return [PSCustomObject]@{
-            OutputPath = $this.OutputPath
-            StreamFile = $this.StreamFile
+            OutputPath          = $this.OutputPath
+            StreamFile          = $this.StreamFile
             TotalResultsWritten = $this.TotalResultsWritten
-            TotalFlushes = $this.TotalFlushes
-            BufferSize = $this.BufferSize
-            OriginalBufferSize = $this.OriginalBufferSize
-            PeakMemoryMB = [Math]::Round($this.PeakMemoryMB, 2)
-            ResultsPerSecond = [Math]::Round($this.ResultsPerSecond, 2)
-            ElapsedSeconds = [Math]::Round(((Get-Date) - $this.StartTime).TotalSeconds, 2)
-            IsFinalized = $this.IsFinalized
+            TotalFlushes        = $this.TotalFlushes
+            BufferSize          = $this.BufferSize
+            OriginalBufferSize  = $this.OriginalBufferSize
+            PeakMemoryMB        = [Math]::Round($this.PeakMemoryMB, 2)
+            ResultsPerSecond    = [Math]::Round($calculatedResultsPerSecond, 2)
+            ElapsedSeconds      = [Math]::Round($elapsedSeconds, 2)
+            IsFinalized         = $this.IsFinalized
         }
     }
-    
-    return $streamingWriter
 }
 
-
-<# STREAMING RESULT READER #>
-function Read-StreamedResults {
-    <#
-    .SYNOPSIS
-        Reads results from streaming JSONL file back into PowerShell objects.
-    
-    .DESCRIPTION
-        Reconstructs in-memory results from streaming output file, useful for
-        post-processing or analysis after streaming completion.
-        
-        Supports filtering and selective reading for large files.
-    
-    .PARAMETER StreamFile
-        Path to JSONL streaming file to read.
-    
-    .PARAMETER MaxResults
-        Maximum number of results to read. If 0, reads all. Default: 0.
-    
-    .PARAMETER Filter
-        Optional filter block to apply to each result.
-    #>
+function New-StreamingOutputWriter {
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
-        [ValidateScript({ Test-Path $_ })]
-        [string]$StreamFile,
-        
+        [ValidateNotNullOrEmpty()]
+        [string]$OutputPath,
+
         [Parameter(Mandatory=$false)]
-        [int]$MaxResults = 0,
-        
+        [ValidateRange(1, 1000)]
+        [int]$BufferSize = 10,
+
         [Parameter(Mandatory=$false)]
-        [scriptblock]$Filter = $null
+        [ValidateRange(1, 600)]
+        [int]$FlushIntervalSeconds = 30,
+
+        [Parameter(Mandatory=$false)]
+        [bool]$EnableMemoryMonitoring = $false,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateRange(50, 4096)]
+        [int]$MemoryThresholdMB = 200
     )
-    
-    $results = @()
-    $count = 0
-    
+
+    [StreamingOutputWriter]::new(
+        $OutputPath,
+        $BufferSize,
+        $FlushIntervalSeconds,
+        [bool]$EnableMemoryMonitoring,
+        $MemoryThresholdMB
+    )
+}
+
+function Read-StreamedResults {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateScript({ Test-Path -LiteralPath $_ })]
+        [string]$StreamFile,
+
+        [Parameter()]
+        [ValidateRange(0, [int]::MaxValue)]
+        [int]$MaxResults = 0,
+
+        [Parameter()]
+        [scriptblock]$Filter
+    )
+
+    $results = New-Object System.Collections.Generic.List[psobject]
+    $reader = $null
+    $acceptedCount = 0
+
     try {
-        $reader = [System.IO.File]::OpenText($StreamFile)
-        
+        $reader = [System.IO.File]::OpenText((Resolve-Path -LiteralPath $StreamFile))
+
         while ($null -ne ($line = $reader.ReadLine())) {
             if ([string]::IsNullOrWhiteSpace($line)) {
                 continue
             }
-            
+
             $obj = $line | ConvertFrom-Json
-            
-            # Apply filter if provided
+
             if ($Filter) {
-                if (& $Filter $obj) {
-                    $results += $obj
+                $include = $false
+                try {
+                    $filtered = @($obj | Where-Object -FilterScript $Filter)
+                    $include = $filtered.Count -gt 0
                 }
-            } else {
-                $results += $obj
+                catch {
+                    $include = [bool](& $Filter $obj)
+                }
+
+                if (-not $include) {
+                    continue
+                }
             }
-            
-            $count++
-            if ($MaxResults -gt 0 -and $count -ge $MaxResults) {
+
+            $results.Add($obj)
+            $acceptedCount++
+
+            if ($MaxResults -gt 0 -and $acceptedCount -ge $MaxResults) {
                 break
             }
         }
-    } finally {
-        $reader.Close()
-        $reader.Dispose()
     }
-    
+    finally {
+        if ($reader) {
+            $reader.Close()
+            $reader.Dispose()
+        }
+    }
+
     return $results
 }
 
-
-<# CONSOLIDATE STREAMING RESULTS #>
 function Consolidate-StreamingResults {
-    <#
-    .SYNOPSIS
-        Consolidates streaming JSONL file into standard JSON audit results.
-    
-    .DESCRIPTION
-        Processes JSONL streaming output and creates consolidated audit result files
-        (JSON, CSV) while maintaining low memory footprint.
-        
-        Useful for converting streaming output into final deliverables.
-    
-    .PARAMETER StreamFile
-        Path to JSONL streaming file.
-    
-    .PARAMETER OutputPath
-        Directory for consolidated results.
-    
-    .PARAMETER IncludeCSV
-        If $true, generates CSV export in addition to JSON. Default: $true.
-    
-    .PARAMETER IncludeHTML
-        If $true, generates HTML summary. Default: $true.
-    #>
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
-        [ValidateScript({ Test-Path $_ })]
+        [ValidateScript({ Test-Path -LiteralPath $_ })]
         [string]$StreamFile,
-        
+
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [string]$OutputPath,
-        
-        [Parameter(Mandatory=$false)]
+
+        [Parameter()]
         [bool]$IncludeCSV = $true,
-        
-        [Parameter(Mandatory=$false)]
+
+        [Parameter()]
         [bool]$IncludeHTML = $true
     )
-    
-    # Create output directory if needed
-    if (-not (Test-Path $OutputPath)) {
+
+    if (-not (Test-Path -LiteralPath $OutputPath)) {
         New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
     }
-    
-    # Read all results from stream
-    $results = Read-StreamedResults -StreamFile $StreamFile
-    
-    # Generate timestamp
-    $timestamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
-    
-    # Export consolidated JSON
-    $jsonOutput = Join-Path $OutputPath "audit_consolidated_$timestamp.json"
-    @{
-        timestamp = (Get-Date -Format 'u')
-        streamSource = $StreamFile
-        resultsCount = $results.Count
-        results = $results
-    } | ConvertTo-Json -Depth 10 | Out-File -FilePath $jsonOutput -Encoding UTF8
-    
-    Write-Host "[CONSOLIDATION] Wrote consolidated JSON: $jsonOutput" -ForegroundColor Green
-    
-    # Export CSV if requested
-    if ($IncludeCSV) {
-        $csvOutput = Join-Path $OutputPath "audit_summary_$timestamp.csv"
-        
-        # Flatten results for CSV
-        $flatResults = @()
-        foreach ($result in $results) {
-            if ($result.PSObject.Properties['computerName']) {
-                $flatResults += [PSCustomObject]@{
-                    ComputerName = $result.computerName
-                    Success = $result.success
-                    ExecutionTime = $result.executionTimeSeconds
-                    CollectorCount = @($result.collectors.PSObject.Properties).Count
-                    ErrorCount = if ($result.summary.failureCount) { $result.summary.failureCount } else { 0 }
+
+    $timestamp = Get-Date
+    $suffix = '{0:yyyyMMdd-HHmmss-fff}' -f $timestamp
+    $jsonOutput = Join-Path $OutputPath "audit_consolidated_$suffix.json"
+    $csvOutput = if ($IncludeCSV) { Join-Path $OutputPath "audit_summary_$suffix.csv" } else { $null }
+    $htmlOutput = if ($IncludeHTML) { Join-Path $OutputPath "audit_summary_$suffix.html" } else { $null }
+
+    $reader = $null
+    $jsonWriter = $null
+    $htmlWriter = $null
+    $csvBuffer = if ($IncludeCSV) { New-Object System.Collections.Generic.List[psobject] } else { $null }
+    $csvFlushThreshold = 200
+    $csvFlusher = {
+        param(
+            [System.Collections.Generic.List[psobject]]$buffer,
+            [string]$path
+        )
+
+        if ($buffer.Count -eq 0) {
+            return
+        }
+
+        $append = Test-Path -LiteralPath $path
+        $buffer | Export-Csv -Path $path -NoTypeInformation -Encoding UTF8 -Append:$append
+        $buffer.Clear()
+    }
+
+    $resultsCount = 0
+    $successCount = 0
+    $failureCount = 0
+
+    try {
+        $reader = [System.IO.File]::OpenText((Resolve-Path -LiteralPath $StreamFile))
+        $jsonWriter = [System.IO.StreamWriter]::new($jsonOutput, $false, [System.Text.Encoding]::UTF8)
+
+        $timestampJson = (Get-Date -Format 'o') | ConvertTo-Json
+        $streamSourceJson = (Resolve-Path -LiteralPath $StreamFile).Path | ConvertTo-Json
+
+        $jsonWriter.WriteLine('{')
+        $jsonWriter.WriteLine("  ""timestamp"": $timestampJson,")
+        $jsonWriter.WriteLine("  ""streamSource"": $streamSourceJson,")
+        $jsonWriter.WriteLine('  "results": [')
+
+        if ($IncludeHTML) {
+            $htmlWriter = [System.IO.StreamWriter]::new($htmlOutput, $false, [System.Text.Encoding]::UTF8)
+            $htmlWriter.WriteLine('<!DOCTYPE html>')
+            $htmlWriter.WriteLine('<html>')
+            $htmlWriter.WriteLine('<head>')
+            $htmlWriter.WriteLine('    <title>Audit Results Summary</title>')
+            $htmlWriter.WriteLine('    <style>body { font-family: Arial; margin: 20px; } table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #ddd; padding: 8px; }</style>')
+            $htmlWriter.WriteLine('</head>')
+            $htmlWriter.WriteLine('<body>')
+            $htmlWriter.WriteLine('    <h1>Audit Results Summary</h1>')
+            $htmlWriter.WriteLine('    <table>')
+            $htmlWriter.WriteLine('        <tr><th>Computer Name</th><th>Status</th><th>Execution Time (s)</th><th>Collectors</th><th>Errors</th></tr>')
+        }
+
+        $isFirst = $true
+        while ($null -ne ($line = $reader.ReadLine())) {
+            if ([string]::IsNullOrWhiteSpace($line)) {
+                continue
+            }
+
+            $trimmed = $line.Trim()
+            $obj = $trimmed | ConvertFrom-Json
+
+            if (-not $isFirst) {
+                $jsonWriter.WriteLine(',')
+            }
+            else {
+                $isFirst = $false
+            }
+
+            $jsonWriter.Write('    ')
+            $jsonWriter.Write($trimmed)
+
+            $resultsCount++
+            if ($obj.success) { $successCount++ } else { $failureCount++ }
+
+            $collectorCount = 0
+            if ($obj.collectors -is [System.Collections.IEnumerable]) {
+                try {
+                    $collectorCount = @($obj.collectors).Count
+                }
+                catch {
+                    $collectorCount = 0
                 }
             }
+            elseif ($obj.collectors -and $obj.collectors.PSObject) {
+                $collectorCount = @($obj.collectors.PSObject.Properties).Count
+            }
+
+            $errorCount = 0
+            if ($obj.summary -and $obj.summary.failureCount) {
+                $errorCount = $obj.summary.failureCount
+            }
+
+            if ($IncludeCSV) {
+                $flatEntry = [PSCustomObject]@{
+                    ComputerName   = $obj.computerName
+                    Success        = $obj.success
+                    ExecutionTime  = $obj.executionTimeSeconds
+                    CollectorCount = $collectorCount
+                    ErrorCount     = $errorCount
+                }
+                $csvBuffer.Add($flatEntry)
+                if ($csvBuffer.Count -ge $csvFlushThreshold) {
+                    & $csvFlusher $csvBuffer $csvOutput
+                }
+            }
+
+            if ($htmlWriter) {
+                $statusLabel = if ($obj.success) { '&check; Success' } else { '&times; Failed' }
+                $htmlWriter.WriteLine('        <tr>')
+                $htmlWriter.WriteLine("            <td>$($obj.computerName)</td>")
+                $htmlWriter.WriteLine("            <td>$statusLabel</td>")
+                $htmlWriter.WriteLine("            <td>$($obj.executionTimeSeconds)</td>")
+                $htmlWriter.WriteLine("            <td>$collectorCount</td>")
+                $htmlWriter.WriteLine("            <td>$errorCount</td>")
+                $htmlWriter.WriteLine('        </tr>')
+            }
         }
-        
-        $flatResults | Export-Csv -Path $csvOutput -NoTypeInformation -Encoding UTF8
-        Write-Host "[CONSOLIDATION] Wrote CSV summary: $csvOutput" -ForegroundColor Green
-    }
-    
-    # Export HTML summary if requested
-    if ($IncludeHTML) {
-        $htmlOutput = Join-Path $OutputPath "audit_summary_$timestamp.html"
-        
-        $html = @"
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Audit Results Summary</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { color: #333; }
-        .summary { background: #f0f0f0; padding: 10px; margin: 10px 0; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #4CAF50; color: white; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-    </style>
-</head>
-<body>
-    <h1>Audit Results Summary</h1>
-    <div class="summary">
-        <p><strong>Total Servers:</strong> $($results.Count)</p>
-        <p><strong>Successful:</strong> $($results | Where-Object { $_.success } | Measure-Object | Select-Object -ExpandProperty Count)</p>
-        <p><strong>Failed:</strong> $($results | Where-Object { -not $_.success } | Measure-Object | Select-Object -ExpandProperty Count)</p>
-        <p><strong>Generated:</strong> $(Get-Date -Format 'g')</p>
-    </div>
-    <table>
-        <tr>
-            <th>Computer Name</th>
-            <th>Status</th>
-            <th>Execution Time (s)</th>
-            <th>Collectors</th>
-        </tr>
-"@
-        
-        foreach ($result in $results) {
-            $status = if ($result.success) { "✓ Success" } else { "✗ Failed" }
-            $html += @"
-        <tr>
-            <td>$($result.computerName)</td>
-            <td>$status</td>
-            <td>$($result.executionTimeSeconds)</td>
-            <td>$(@($result.collectors.PSObject.Properties).Count)</td>
-        </tr>
-"@
+
+        $jsonWriter.WriteLine()
+        $jsonWriter.WriteLine('  ],')
+        $jsonWriter.WriteLine("  ""resultsCount"": $resultsCount")
+        $jsonWriter.WriteLine('}')
+
+        if ($IncludeCSV) {
+            & $csvFlusher $csvBuffer $csvOutput
+            Write-Host "[CONSOLIDATION] Wrote CSV summary: $csvOutput" -ForegroundColor Green
         }
-        
-        $html += @"
-    </table>
-</body>
-</html>
-"@
-        
-        $html | Out-File -FilePath $htmlOutput -Encoding UTF8
-        Write-Host "[CONSOLIDATION] Wrote HTML summary: $htmlOutput" -ForegroundColor Green
+
+        if ($htmlWriter) {
+            $htmlWriter.WriteLine('    </table>')
+            $htmlWriter.WriteLine('    <div class="summary">')
+            $htmlWriter.WriteLine("        <p><strong>Total Servers:</strong> $resultsCount</p>")
+            $htmlWriter.WriteLine("        <p><strong>Successful:</strong> $successCount</p>")
+            $htmlWriter.WriteLine("        <p><strong>Failed:</strong> $failureCount</p>")
+            $htmlWriter.WriteLine("        <p><strong>Generated:</strong> $(Get-Date -Format 'g')</p>")
+            $htmlWriter.WriteLine('    </div>')
+            $htmlWriter.WriteLine('</body>')
+            $htmlWriter.WriteLine('</html>')
+            Write-Host "[CONSOLIDATION] Wrote HTML summary: $htmlOutput" -ForegroundColor Green
+        }
+
+        Write-Host "[CONSOLIDATION] Wrote consolidated JSON: $jsonOutput" -ForegroundColor Green
     }
-    
-    return [PSCustomObject]@{
-        JsonFile = $jsonOutput
-        CsvFile = if ($IncludeCSV) { $csvOutput } else { $null }
-        HtmlFile = if ($IncludeHTML) { $htmlOutput } else { $null }
-        ResultsCount = $results.Count
+    finally {
+        if ($reader) {
+            $reader.Close()
+            $reader.Dispose()
+        }
+        if ($jsonWriter) {
+            $jsonWriter.Flush()
+            $jsonWriter.Dispose()
+        }
+        if ($htmlWriter) {
+            $htmlWriter.Flush()
+            $htmlWriter.Dispose()
+        }
+    }
+
+    [PSCustomObject]@{
+        JsonFile     = $jsonOutput
+        CsvFile      = $csvOutput
+        HtmlFile     = $htmlOutput
+        ResultsCount = $resultsCount
+        Successful   = $successCount
+        Failed       = $failureCount
     }
 }
 
-
-<# EXPORT #>
-Export-ModuleMember -Function @(
-    'New-StreamingOutputWriter',
-    'Read-StreamedResults',
-    'Consolidate-StreamingResults'
-)
+if ($MyInvocation.MyCommand.Module) {
+    Export-ModuleMember -Function @(
+        'New-StreamingOutputWriter',
+        'Read-StreamedResults',
+        'Consolidate-StreamingResults'
+    )
+}

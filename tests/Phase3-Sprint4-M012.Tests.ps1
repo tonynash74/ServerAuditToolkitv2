@@ -245,6 +245,27 @@ Describe "M-012: Output Streaming & Memory Reduction" -Tag "Phase3", "OutputStre
             $readResults = Read-StreamedResults -StreamFile $writer.StreamFile -MaxResults 3
             $readResults.Count | Should -Be 3
         }
+            It "Respects MaxResults even when filter skips entries" {
+                $writer = New-StreamingOutputWriter -OutputPath $global:TestOutputPath -BufferSize 2
+
+                for ($i = 1; $i -le 6; $i++) {
+                    $result = [PSCustomObject]@{
+                        computerName = "SERVER0$i"
+                        success = ($i % 2 -eq 0)
+                    }
+                    $writer.AddResult($result)
+                }
+
+                $writer.Finalize()
+
+                $filtered = Read-StreamedResults `
+                    -StreamFile $writer.StreamFile `
+                    -Filter { $_.success } `
+                    -MaxResults 2
+
+                $filtered.Count | Should -Be 2
+                $filtered | ForEach-Object { $_.success | Should -BeTrue }
+            }
     }
     
     <# CONSOLIDATION TESTS #>
@@ -273,6 +294,8 @@ Describe "M-012: Output Streaming & Memory Reduction" -Tag "Phase3", "OutputStre
             
             Test-Path $consolidation.JsonFile | Should -Be $true
             $consolidation.ResultsCount | Should -Be 3
+                $consolidation.Successful | Should -Be 3
+                $consolidation.Failed | Should -Be 0
         }
         
         It "Generates CSV export during consolidation" {
@@ -297,6 +320,7 @@ Describe "M-012: Output Streaming & Memory Reduction" -Tag "Phase3", "OutputStre
                 -IncludeHTML $false
             
             Test-Path $consolidation.CsvFile | Should -Be $true
+                $consolidation.ResultsCount | Should -Be 3
         }
         
         It "Generates HTML summary during consolidation" {
@@ -320,6 +344,7 @@ Describe "M-012: Output Streaming & Memory Reduction" -Tag "Phase3", "OutputStre
                 -IncludeHTML $true
             
             Test-Path $consolidation.HtmlFile | Should -Be $true
+                $consolidation.ResultsCount | Should -Be 3
         }
     }
     

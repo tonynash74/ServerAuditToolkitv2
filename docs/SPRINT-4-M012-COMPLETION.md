@@ -256,22 +256,26 @@ Consolidate to final formats
 ```json
 {
     "output": {
-        "streamResults": true,
-        "streamBufferSize": 10,
-        "streamFlushInterval": 30,
-        "enableMemoryMonitoring": true,
-        "memoryThresholdMB": 200,
-        "outputDirectory": "C:\\audit-results"
+            "streaming": {
+                  "streamResults": true,
+                  "bufferSize": 10,
+                  "flushIntervalSeconds": 30,
+                  "enableMemoryMonitoring": true,
+                  "memoryThresholdMB": 200,
+                  "outputDirectory": "C:\\audit-results"
+            }
     }
 }
 ```
 
-### Invoke-ServerAudit.ps1 Parameters (To Be Added)
+### Invoke-ServerAudit.ps1 Parameters
 
 - `-EnableStreaming`: Switch to enable streaming output
-- `-StreamBufferSize`: Batch size (1-100)
-- `-StreamFlushInterval`: Seconds between flushes
-- `-EnableMemoryMonitoring`: Auto-throttle under pressure
+- `-StreamBufferSize`: Results buffered before flush (1-100)
+- `-StreamFlushIntervalSeconds`: Seconds between flushes
+- `-EnableStreamingMemoryMonitoring`: Auto-throttle under pressure
+- `-StreamingMemoryThresholdMB`: Memory ceiling for throttling logic
+- `-StreamOutputPath`: Custom directory for JSONL + reports
 
 ---
 

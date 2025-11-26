@@ -54,9 +54,11 @@ StreamingOutputWriter
 # Configure to enable streaming
 $auditConfig = @{
     output = @{
-        streamResults = $true
-        streamBufferSize = 10  # Results per batch
-        streamFlushInterval = 30  # Seconds
+        streaming = @{
+            streamResults = $true
+            bufferSize = 10              # Results per batch
+            flushIntervalSeconds = 30   # Seconds
+        }
     }
 }
 
@@ -130,12 +132,14 @@ Add these configuration options to enable streaming:
 ```json
 {
     "output": {
-        "streamResults": true,
-        "streamBufferSize": 10,
-        "streamFlushInterval": 30,
-        "enableMemoryMonitoring": true,
-        "memoryThresholdMB": 200,
-        "outputDirectory": "C:\\audit-results"
+        "streaming": {
+            "streamResults": true,
+            "bufferSize": 10,
+            "flushIntervalSeconds": 30,
+            "enableMemoryMonitoring": true,
+            "memoryThresholdMB": 200,
+            "outputDirectory": "C:\\audit-results"
+        }
     }
 }
 ```
@@ -145,10 +149,21 @@ Add these configuration options to enable streaming:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `streamResults` | bool | false | Enable streaming output |
-| `streamBufferSize` | int | 10 | Results per batch (1-100) |
-| `streamFlushInterval` | int | 30 | Seconds between flushes (5-300) |
+| `bufferSize` | int | 10 | Results per batch (1-100) |
+| `flushIntervalSeconds` | int | 30 | Seconds between flushes (5-300) |
 | `enableMemoryMonitoring` | bool | false | Enable memory-based throttling |
 | `memoryThresholdMB` | int | 200 | Memory threshold for throttling (50-1000) |
+
+### Invoke-ServerAudit Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `-EnableStreaming` | Turns on streaming mode for the current audit run regardless of config defaults |
+| `-StreamBufferSize` | Overrides the configured buffer size (1-100 results per flush) |
+| `-StreamFlushIntervalSeconds` | Overrides the flush interval (5-300 seconds) |
+| `-EnableStreamingMemoryMonitoring` | Forces memory monitoring on/off for the run |
+| `-StreamingMemoryThresholdMB` | Sets the memory pressure threshold for auto-throttling |
+| `-StreamOutputPath` | Custom directory for JSONL and consolidated outputs |
 
 ## Performance Characteristics
 
@@ -460,7 +475,13 @@ $writer | ForEach-Object { $results += $_ }
 # Just add -EnableStreaming flag
 ```
 
-The streaming writer returns objects to the pipeline, so existing scripts continue working without modification.
+The streaming writer returns objects to the pipeline, so existing scripts continue working without modification. When `Invoke-ServerAudit` runs with streaming enabled, the returned object now includes an `AuditResults.Streaming` block pointing to the JSONL file plus writer statistics. To keep the memory footprint near-zero, `AuditResults.Servers` is intentionally left empty—hydrate individual results with `Read-StreamedResults` or by consolidating the stream when you need the full dataset in memory.
+
+```powershell
+$results = Invoke-ServerAudit -EnableStreaming
+$results.Streaming.StreamFile  # => path to stream_*.jsonl
+$rehydrated = Read-StreamedResults -StreamFile $results.Streaming.StreamFile -MaxResults 10
+```
 
 ## Performance Testing
 
