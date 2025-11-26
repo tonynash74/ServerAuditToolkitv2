@@ -1,6 +1,17 @@
-# Development Guide — ServerAuditToolkitV2
+# Development Guide — ServerAuditToolkitV2 (Phase 3)
+
+**Current Version**: v2.2.0-RC (Phase 3: 13/14 enhancements complete)
 
 This guide provides detailed technical information for developing, enhancing, and maintaining ServerAuditToolkitV2.
+
+**Phase 3 Additions** (November 2025):
+- ✅ M-013: Comprehensive API documentation (docs/API-REFERENCE.md)
+- ✅ M-014: Health diagnostics engine (src/Private/New-AuditHealthDiagnostics.ps1)
+- ✅ Batch processing for 100+ servers (M-010)
+- ✅ Network resilience with DNS retry (M-008)
+- ✅ Resource monitoring with auto-throttle (M-009)
+
+For Phase 3 API reference, see: **docs/API-REFERENCE.md**
 
 ---
 
