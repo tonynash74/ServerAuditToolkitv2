@@ -36,7 +36,7 @@
 
 ### Key Features
 
-- **PowerShell 2.0 → 7.x compatible** — Runs on legacy (Server 2008 R2) to modern servers (Server 2022)
+- **PowerShell compatibility** — Core orchestrator retains a baseline of PS2-era compatibility for very old hosts, but many modern features (PowerShell classes, streaming writer, CIM-optimized collectors and parallel execution) require **PowerShell 5.1+**. For best performance and full feature set, **PowerShell 7.x is recommended**.
 - **13 Production Collectors** (TIER 1-5) — Comprehensive infrastructure + compliance audit
 - **Phase 3 Enhancements** (11/14 complete, 93%) — Structured logging, batch processing (100+ servers), network resilience, health diagnostics
 - **TIER 6: Document Link Analysis Engine** — Extract links from Word/Excel/PowerPoint/PDF + validate with risk scoring
@@ -55,9 +55,11 @@
 
 - **Local admin privileges** on target servers OR **domain user** (if on DC)
 - **WinRM enabled** on remote servers (`Enable-PSRemoting -Force`)
-- **PowerShell 2.0+** (tested on PS 2.0, 5.1, 7.x)
+- **PowerShell**: Minimum **PowerShell 5.1** for full functionality; some legacy collectors can run on PS 2.0 but features such as PowerShell classes and streaming require 5.1+. **PowerShell 7.x is recommended** for best performance and parallel execution.
 - **Network access** — Port 5985 (HTTP) or 5986 (HTTPS) for WinRM
 - **Optional:** Document scanning path (UNC/local folder) for link analysis
+
+> Note: If you must run on very old hosts (Server 2008 R2 with PS2), expect reduced functionality and slower, sequential execution. Wherever possible run the orchestrator from an admin workstation with PS 5.1+ or 7.x.
 
 ### 30-Second Start
 
@@ -280,25 +282,24 @@ ServerAuditToolkitv2/
 ---
 
 ## Supported Environments
-
 ### Windows Server Versions
 
-| OS Version | PS 2.0 | PS 4.0 | PS 5.1 | PS 7.x | Status |
-|---|---|---|---|---|---|
-| **Server 2008 R2** | ✅ Yes | ⚠️ Partial | ❌ No | ❌ No | Legacy (EOL) |
-| **Server 2012 R2** | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No | Baseline |
-| **Server 2016** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Recommended |
-| **Server 2019** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Recommended |
-| **Server 2022** | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes | Modern (required PS 4.0+) |
+| OS Version | PS 2.0 (legacy) | PS 4.0 | PS 5.1 | PS 7.x | Status |
+|---|---:|---:|---:|---:|---|
+| **Server 2008 R2** | ✅ Limited | ⚠️ Partial | ❌ Not supported | ❌ Not supported | Legacy (EOL) — run only for very old environments |
+| **Server 2012 R2** | ❌ Not applicable | ✅ Yes | ✅ Yes | ❌ Limited | Baseline (upgrade recommended)
+| **Server 2016** | ❌ Not applicable | ✅ Yes | ✅ Yes | ✅ Yes | Recommended — PS 5.1+ supported
+| **Server 2019** | ❌ Not applicable | ✅ Yes | ✅ Yes | ✅ Yes | Recommended — PS 5.1+ supported
+| **Server 2022** | ❌ Not applicable | ✅ Yes | ✅ Yes | ✅ Yes | Modern — PS 5.1+ / PS 7.x recommended |
 
 ### PowerShell Versions
 
-| PS Version | Release | Collectors | Performance | Notes |
-|---|---|---|---|---|
-| **PS 2.0** | 2009 | All (baseline) | Sequential, slowest | Use only for legacy Server 2008 R2 |
-| **PS 4.0** | 2013 | All (baseline) | Sequential, slower | Minimal improvement over PS 2.0 |
-| **PS 5.1** | 2016 | All + optimized (CIM) | ~3-5x faster via CIM | **Recommended baseline** |
-| **PS 7.x** | 2021+ | All + optimized (async, parallel) | ~5-10x faster total | **Modern standard** |
+| PS Version | Release | Collectors & Support | Performance | Notes |
+|---|---:|---|---:|---|
+| **PS 2.0** | 2009 | Legacy support only; very limited collector set on modern OSes | Sequential, slowest | Use only for constrained legacy hosts (Server 2008 R2); many features unavailable
+| **PS 4.0** | 2013 | Baseline collectors; limited modern features | Sequential | Transitional — lacks classes/CIM optimizations available in 5.1+
+| **PS 5.1** | 2016 | Full feature set for collectors (CIM, classes) | Good (~3-5x faster for CIM collectors) | Recommended minimum for full functionality
+| **PS 7.x** | 2021+ | Best support: async, parallel execution, modern module ecosystem | Best (~5-10x faster overall) | Recommended for development and large-scale runs
 
 ### Recommended Configuration
 
@@ -340,6 +341,40 @@ Invoke-ServerAudit -ComputerName "SERVER01"
 Trigger audits via REST API for managed scanning across multiple servers.
 
 ---
+
+### Testing & Development
+
+- **Recommended dev environment**: Work from an admin workstation with **PowerShell 7.x** (or 5.1 when testing legacy compatibility), Git, and a modern editor like VS Code.
+- **Pester (tests)**: The project uses Pester v5 for the test suite. Install locally with:
+
+```powershell
+Install-Module -Name Pester -RequiredVersion 5.7.1 -Scope CurrentUser
+```
+
+- **Run tests** (from project root):
+
+```powershell
+# Run all tests
+Invoke-Pester -Path .\tests
+
+# Run a single test file
+Invoke-Pester -Path .\tests\Phase3-Sprint4-M012.Tests.ps1
+```
+
+- **Execution policy**: When developing or running locally you may need to allow script execution for the session:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+- **Static analysis**: `PSScriptAnalyzer` rules are included in CI; run locally with:
+
+```powershell
+Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
+Invoke-ScriptAnalyzer -Path .\src -Recurse
+```
+
+> Tip: Run tests inside an elevated (Administrator) PowerShell session where WinRM endpoints will be available and file write permissions for `audit_results` are granted.
 
 ## Usage
 
