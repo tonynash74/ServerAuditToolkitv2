@@ -279,7 +279,12 @@
     "description": "Adaptive: detect server CPU/RAM and optimize; Fixed: manual override",
     "minParallelJobs": 1,
     "maxParallelJobs": 3,
-    "jobQueueSize": 10
+    "jobQueueSize": 10,
+    "parallelismMode": "adaptive",
+    "description_parallelismMode": "adaptive: adjust parallelism based on load; fixed: use maxParallelJobs always",
+    "slowServerCpuThreshold": 85,
+    "slowServerMemoryThreshold": 90,
+    "description_slowServerThresholds": "If CPU% or Memory% exceeds threshold, reduce parallelism automatically"
   },
   "networking": {
     "transport": "WinRM",
@@ -288,7 +293,12 @@
     "port": 5985,
     "retryAttempts": 3,
     "retryDelaySeconds": 2,
-    "connectionTimeoutSeconds": 30
+    "connectionTimeoutSeconds": 30,
+    "retryStrategy": "exponential",
+    "description_retryStrategy": "exponential: exponential backoff; linear: constant delay between retries",
+    "dnsRetryAttempts": 2,
+    "connectionPoolSize": 5,
+    "description_connectionPoolSize": "Reuse WinRM sessions for up to N concurrent connections"
   },
   "output": {
     "formats": [
@@ -314,7 +324,12 @@
     "logFile": "./audit_results/audit.log",
     "logFormat": "JSON",
     "writeToConsole": true,
-    "writeToFile": true
+    "writeToFile": true,
+    "retentionDays": 30,
+    "description_retentionDays": "Automatically delete logs older than N days",
+    "maxLogFileSizeMB": 10,
+    "maxLogFileCount": 5,
+    "description_logRotation": "Rotate logs when they exceed maxLogFileSizeMB, keep max N files"
   },
   "compliance": {
     "dataDiscovery": {
