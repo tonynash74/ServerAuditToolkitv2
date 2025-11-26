@@ -9,24 +9,59 @@
     - Filter collectors by Windows OS version
     - Get optimal collector variant for current environment
     - Validate collector dependencies
+    
+    Caches metadata in memory with 5-minute TTL to reduce file I/O.
 
 .PARAMETER MetadataPath
     Path to collector-metadata.json. Defaults to collectors folder in module root.
+
+.PARAMETER Force
+    If $true, bypass cache and reload from disk. Useful for testing or after config changes.
 
 .EXAMPLE
     $metadata = Get-CollectorMetadata
     $compatibleCollectors = $metadata | Where-Object { $_.psVersions -contains '2.0' }
 
+.EXAMPLE
+    # Force reload from disk
+    $metadata = Get-CollectorMetadata -Force
+
 .NOTES
     Compatible with PowerShell 2.0+
+    Caching: Metadata cached for 5 minutes by default. Use -Force to bypass cache.
 #>
+
+# Module-level cache (shared across all calls in same session)
+$script:MetadataCache = @{
+    Data = $null
+    Timestamp = $null
+    TTLSeconds = 300  # 5 minutes
+}
 
 function Get-CollectorMetadata {
     [CmdletBinding()]
     param(
         [Parameter(ValueFromPipeline=$true)]
-        [string]$MetadataPath
+        [string]$MetadataPath,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Force
     )
+
+    # Check cache first (unless -Force specified)
+    if (-not $Force -and $script:MetadataCache.Data -and $script:MetadataCache.Timestamp) {
+        $cacheAge = (Get-Date) - $script:MetadataCache.Timestamp
+        if ($cacheAge.TotalSeconds -lt $script:MetadataCache.TTLSeconds) {
+            Write-Verbose "Metadata cache hit (age: $($cacheAge.TotalSeconds.ToString('F1'))s, TTL: $($script:MetadataCache.TTLSeconds)s)"
+            return $script:MetadataCache.Data
+        }
+        else {
+            Write-Verbose "Metadata cache expired (age: $($cacheAge.TotalSeconds.ToString('F1'))s)"
+        }
+    }
+    elseif ($Force) {
+        Write-Verbose "Metadata cache bypass (Force flag)"
+    }
 
     # If not provided, assume standard module structure
     if ([string]::IsNullOrEmpty($MetadataPath)) {
@@ -42,6 +77,7 @@ function Get-CollectorMetadata {
 
     # Load JSON (PS2-compatible approach)
     try {
+        Write-Verbose "Loading metadata from: $MetadataPath"
         $jsonContent = Get-Content -LiteralPath $MetadataPath -Raw -ErrorAction Stop
         
         # PS2 doesn't have ConvertFrom-Json, so we use a fallback
@@ -53,11 +89,68 @@ function Get-CollectorMetadata {
             $metadata = Invoke-Expression $jsonContent
         }
 
+        # Cache the result
+        $script:MetadataCache.Data = $metadata
+        $script:MetadataCache.Timestamp = Get-Date
+        Write-Verbose "Metadata cached (TTL: $($script:MetadataCache.TTLSeconds)s)"
+
         return $metadata
     } catch {
         Write-Error "Failed to load metadata: $_"
         return $null
     }
+}
+
+<#
+.SYNOPSIS
+    Clears the collector metadata cache manually.
+
+.DESCRIPTION
+    Resets the in-memory metadata cache. Useful for testing or after external metadata changes.
+    The cache also auto-expires after 5 minutes of inactivity.
+
+.EXAMPLE
+    Clear-CollectorMetadataCache
+    $metadata = Get-CollectorMetadata  # Will reload from disk
+
+.NOTES
+    Cache auto-expires after 5 minutes. Manual clear is optional.
+#>
+function Clear-CollectorMetadataCache {
+    [CmdletBinding()]
+    param()
+    
+    $script:MetadataCache.Data = $null
+    $script:MetadataCache.Timestamp = $null
+    Write-Verbose "Metadata cache cleared"
+}
+
+<#
+.SYNOPSIS
+    Gets cache status and statistics.
+
+.EXAMPLE
+    Get-CollectorMetadataCacheStats
+    
+.OUTPUTS
+    PSObject with cache status, age, and TTL information.
+#>
+function Get-CollectorMetadataCacheStats {
+    [CmdletBinding()]
+    param()
+    
+    $stats = @{
+        IsCached = $null -ne $script:MetadataCache.Data
+        CacheAge = if ($script:MetadataCache.Timestamp) { (Get-Date) - $script:MetadataCache.Timestamp } else { $null }
+        TTLSeconds = $script:MetadataCache.TTLSeconds
+        IsExpired = $false
+    }
+    
+    if ($stats.CacheAge) {
+        $stats.IsExpired = $stats.CacheAge.TotalSeconds -ge $stats.TTLSeconds
+    }
+    
+    return [PSCustomObject]$stats
 }
 
 <#
@@ -345,6 +438,8 @@ function Get-CollectorSummary {
 # Export functions
 Export-ModuleMember -Function @(
     'Get-CollectorMetadata',
+    'Clear-CollectorMetadataCache',
+    'Get-CollectorMetadataCacheStats',
     'Get-CompatibleCollectors',
     'Get-CompatibleCollectorsByOS',
     'Get-CollectorVariant',
