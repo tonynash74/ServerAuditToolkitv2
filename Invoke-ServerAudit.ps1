@@ -43,6 +43,28 @@
 .PARAMETER LogLevel
     Logging verbosity: 'Verbose', 'Information', 'Warning', 'Error'.
 
+.PARAMETER UseBatchProcessing
+    (M-010) Enable batch processing for large environments (50+ servers).
+    Processes servers in configurable batches with pipeline parallelism.
+    Streams results to disk instead of buffering (memory efficient).
+
+.PARAMETER BatchSize
+    (M-010) Number of servers per batch. Default: 10. Range: 1-100.
+    Smaller batches = more frequent output; larger batches = better throughput.
+
+.PARAMETER PipelineDepth
+    (M-010) Number of concurrent batches in the pipeline. Default: 2. Range: 1-5.
+    Overlaps batch processing for faster total execution.
+    Example: Depth=2 means batch N processes while batch N+1 collects.
+
+.PARAMETER CheckpointInterval
+    (M-010) Save checkpoint every N batches for recovery. Default: 5. Range: 1-50.
+    Use checkpoints to resume interrupted audits.
+
+.PARAMETER BatchOutputPath
+    (M-010) Directory for batch results and checkpoints.
+    Defaults to $OutputPath\batches.
+
 .EXAMPLE
     # Dry-run to see what will execute
     Invoke-ServerAudit -ComputerName "SERVER01" -DryRun
@@ -100,7 +122,26 @@ function Invoke-ServerAudit {
 
         [Parameter(Mandatory=$false)]
         [ValidateSet('Verbose', 'Information', 'Warning', 'Error')]
-        [string]$LogLevel = 'Information'
+        [string]$LogLevel = 'Information',
+
+        # M-010: Batch processing parameters
+        [Parameter(Mandatory=$false)]
+        [switch]$UseBatchProcessing,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateRange(1, 100)]
+        [int]$BatchSize = 10,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateRange(1, 5)]
+        [int]$PipelineDepth = 2,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateRange(1, 50)]
+        [int]$CheckpointInterval = 5,
+
+        [Parameter(Mandatory=$false)]
+        [string]$BatchOutputPath
     )
 
     begin {
@@ -247,6 +288,49 @@ function Invoke-ServerAudit {
         } catch {
             Write-AuditLog "Parameter validation failed: $_" -Level Error
             throw
+        }
+
+        # M-010: Batch processing for large environments
+        if ($UseBatchProcessing -and $ComputerName.Count -gt $BatchSize) {
+            Write-AuditLog "M-010: Batch processing mode enabled for $($ComputerName.Count) servers (batch size: $BatchSize)" -Level Information
+            
+            try {
+                # Setup batch output path
+                if ([string]::IsNullOrEmpty($BatchOutputPath)) {
+                    $BatchOutputPath = Join-Path -Path $OutputPath -ChildPath 'batches'
+                }
+                
+                if (-not (Test-Path -LiteralPath $BatchOutputPath)) {
+                    [void](New-Item -ItemType Directory -Path $BatchOutputPath -Force -ErrorAction Stop)
+                    Write-AuditLog "Created batch output directory: $BatchOutputPath" -Level Verbose
+                }
+                
+                # Execute batch audit
+                $batchResults = Invoke-BatchAudit `
+                    -Servers $ComputerName `
+                    -Collectors $auditSession.CompatibleCollectors `
+                    -BatchSize $BatchSize `
+                    -PipelineDepth $PipelineDepth `
+                    -CheckpointInterval $CheckpointInterval `
+                    -OutputPath $BatchOutputPath `
+                    -ErrorAction Stop
+                
+                # Store batch results
+                if ($batchResults) {
+                    $auditSession.BatchResults = $batchResults
+                    Write-AuditLog "Batch processing complete: $($batchResults.TotalBatches) batches, $($batchResults.SuccessfulBatches) successful" -Level Information
+                    
+                    if ($batchResults.BatchResults) {
+                        $auditSession.AuditResults.Servers += $batchResults.BatchResults
+                    }
+                }
+                
+                return $auditSession.AuditResults
+                
+            } catch {
+                Write-AuditLog "Batch processing failed: $_" -Level Error
+                throw
+            }
         }
 
         # ====== STAGE 1.5: HEALTH CHECK ======
