@@ -452,7 +452,7 @@ function Consolidate-StreamingResults {
     }
 }
 
-if ($MyInvocation.MyCommand.Module) {
+if ($ExecutionContext.SessionState.Module) {
     Export-ModuleMember -Function @(
         'New-StreamingOutputWriter',
         'Read-StreamedResults',

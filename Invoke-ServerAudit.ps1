@@ -90,6 +90,120 @@
     Uses runspace pools for parallel execution (PS3+); sequential on PS 2.0.
 #>
 
+[CmdletBinding(DefaultParameterSetName='Default')]
+param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+    [Alias('Name', 'Server')]
+    [ValidateNotNullOrEmpty()]
+    [string[]]$ComputerName = @($env:COMPUTERNAME),
+
+    [Parameter(Mandatory=$false)]
+    [string[]]$Collectors,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$DryRun,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(0, 16)]
+    [int]$MaxParallelJobs = 0,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipPerformanceProfile,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$UseCollectorCache = $true,
+
+    [Parameter(Mandatory=$false)]
+    [string]$CollectorPath,
+
+    [Parameter(Mandatory=$false)]
+    [string]$OutputPath = (Join-Path -Path $PWD -ChildPath 'audit_results'),
+
+    [Parameter(Mandatory=$false)]
+    [ValidateSet('Verbose', 'Information', 'Warning', 'Error')]
+    [string]$LogLevel = 'Information',
+
+    # M-010: Batch processing parameters
+    [Parameter(Mandatory=$false)]
+    [switch]$UseBatchProcessing,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, 100)]
+    [int]$BatchSize = 10,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, 5)]
+    [int]$PipelineDepth = 2,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, 50)]
+    [int]$CheckpointInterval = 5,
+
+    [Parameter(Mandatory=$false)]
+    [string]$BatchOutputPath,
+
+    # M-012: Streaming output
+    [Parameter(Mandatory=$false)]
+    [switch]$EnableStreaming,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, 100)]
+    [int]$StreamBufferSize = 10,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(5, 300)]
+    [int]$StreamFlushIntervalSeconds = 30,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$EnableStreamingMemoryMonitoring,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(50, 1000)]
+    [int]$StreamingMemoryThresholdMB = 200,
+
+    [Parameter(Mandatory=$false)]
+    [string]$StreamOutputPath
+)
+
+$moduleManifestPath = Join-Path -Path $PSScriptRoot -ChildPath 'ServerAuditToolkitV2.psd1'
+if (Test-Path -LiteralPath $moduleManifestPath) {
+    try {
+        Import-Module -Name $moduleManifestPath -Force -ErrorAction Stop | Out-Null
+    } catch {
+        Write-Warning "Failed to import ServerAuditToolkitV2 module: $_"
+    }
+} else {
+    Write-Warning "Module manifest not found at $moduleManifestPath."
+}
+
+$MonitorScriptPath = Join-Path -Path $PSScriptRoot -ChildPath 'src\Private\Monitor-AuditResources.ps1'
+if (Test-Path -LiteralPath $MonitorScriptPath) {
+    . $MonitorScriptPath
+} else {
+    Write-Warning "Monitor-AuditResources.ps1 not found at $MonitorScriptPath. Resource auto-throttling will be unavailable."
+}
+
+$CollectorMetadataScriptPath = Join-Path -Path $PSScriptRoot -ChildPath 'src\Collectors\Get-CollectorMetadata.ps1'
+if (Test-Path -LiteralPath $CollectorMetadataScriptPath) {
+    . $CollectorMetadataScriptPath
+} else {
+    Write-Warning "Get-CollectorMetadata.ps1 not found at $CollectorMetadataScriptPath. Collector discovery will fail."
+}
+
+$TestAuditParametersPath = Join-Path -Path $PSScriptRoot -ChildPath 'src\\Private\\Test-AuditParameters.ps1'
+if (Test-Path -LiteralPath $TestAuditParametersPath) {
+    . $TestAuditParametersPath
+} else {
+    Write-Warning "Test-AuditParameters.ps1 not found at $TestAuditParametersPath. Parameter validation will be skipped."
+}
+
+$StreamingWriterPath = Join-Path -Path $PSScriptRoot -ChildPath 'src\\Private\\New-StreamingOutputWriter.ps1'
+if (Test-Path -LiteralPath $StreamingWriterPath) {
+    . $StreamingWriterPath
+} else {
+    Write-Warning "New-StreamingOutputWriter.ps1 not found at $StreamingWriterPath. Streaming output will be unavailable."
+}
+
 function Update-AuditSummaryCounters {
     param(
         [hashtable]$Counters,
@@ -237,8 +351,9 @@ function Invoke-ServerAudit {
         # M-009: Start resource monitoring (CPU/Memory throttling)
         Write-AuditLog "M-009: Starting resource monitoring for auto-throttling" -Level Verbose
         try {
+            $parallelJobs = if ($MaxParallelJobs -gt 0) { $MaxParallelJobs } else { 3 }
             $resourceMonitorJob = Start-AuditResourceMonitoring `
-                -MaxParallelJobs ($MaxParallelJobs -gt 0 ? $MaxParallelJobs : 3) `
+                -MaxParallelJobs $parallelJobs `
                 -CpuThreshold 85 `
                 -MemoryThreshold 90 `
                 -MonitoringIntervalSeconds 2 `
@@ -268,10 +383,15 @@ function Invoke-ServerAudit {
 
         # Resolve collector path
         if ([string]::IsNullOrEmpty($CollectorPath)) {
-            $CollectorPath = Join-Path -Path $PSScriptRoot -ChildPath '..\collectors'
+            $collectorCandidates = @(
+                (Join-Path -Path $PSScriptRoot -ChildPath 'src\Collectors'),
+                (Join-Path -Path $PSScriptRoot -ChildPath '..\collectors')
+            )
+
+            $CollectorPath = $collectorCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
         }
 
-        if (-not (Test-Path -LiteralPath $CollectorPath)) {
+        if (-not $CollectorPath -or -not (Test-Path -LiteralPath $CollectorPath)) {
             Write-AuditLog "Collector path not found: $CollectorPath" -Level Error
             throw "Collector path not found: $CollectorPath"
         }
@@ -392,13 +512,22 @@ function Invoke-ServerAudit {
             Write-AuditLog "Loaded $($auditSession.CollectorMetadata.collectors.Count) collector definitions" -Level Verbose
 
             # Filter by PS version
-            Write-AuditLog "Filtering collectors for PS $($auditSession.LocalPSVersion)..." -Level Verbose
+            $effectivePsVersion = $auditSession.LocalPSVersion
+            try {
+                $parsedVersion = [version]$auditSession.LocalPSVersion
+                if ($parsedVersion.Major -ge 6) {
+                    $effectivePsVersion = '5.1'
+                    Write-AuditLog "No PS$($parsedVersion.Major) collectors defined; falling back to PS 5.1 compatibility set." -Level Warning
+                }
+            } catch {}
+
+            Write-AuditLog "Filtering collectors for PS $effectivePsVersion..." -Level Verbose
             $auditSession.CompatibleCollectors = Get-CompatibleCollectors `
                 -Collectors $auditSession.CollectorMetadata.collectors `
-                -PSVersion $auditSession.LocalPSVersion
+                -PSVersion $effectivePsVersion
 
             if ($auditSession.CompatibleCollectors.Count -eq 0) {
-                throw "No collectors compatible with PS $($auditSession.LocalPSVersion)"
+                throw "No collectors compatible with PS $effectivePsVersion"
             }
 
             Write-AuditLog "Found $($auditSession.CompatibleCollectors.Count) compatible collectors" -Level Information
@@ -1054,10 +1183,10 @@ function Invoke-ParallelCollectors {
 
             # Add collector invocation script
             [void]$powerShell.AddScript({
-                param($Server, $Collector, $TimeoutSeconds, $CollectorPath, $PSVersion)
+                param($Server, $Collector, $TimeoutSeconds, $CollectorPath, $PSVersion, $ScriptRoot)
 
                 # Re-import functions in runspace
-                . (Join-Path -Path $PSScriptRoot -ChildPath '..\core\Get-CollectorMetadata.ps1')
+                . (Join-Path -Path $ScriptRoot -ChildPath 'src\Collectors\Get-CollectorMetadata.ps1')
 
                 Invoke-SingleCollector `
                     -Server $Server `
@@ -1073,6 +1202,7 @@ function Invoke-ParallelCollectors {
             $powerShell.AddArgument($TimeoutSeconds)
             $powerShell.AddArgument($CollectorPath)
             $powerShell.AddArgument($PSVersion)
+            $powerShell.AddArgument($PSScriptRoot)
 
             $asyncHandle = $powerShell.BeginInvoke()
 
@@ -1238,7 +1368,12 @@ function Export-AuditResults {
     Format-Table -AutoSize
 }
 
-# Export public functions
-Export-ModuleMember -Function @(
-    'Invoke-ServerAudit'
-)
+# Auto-run when executed directly (not imported as a module)
+if (-not $ExecutionContext.SessionState.Module) {
+    return Invoke-ServerAudit @PSBoundParameters
+}
+
+# Export public functions when loaded as a module
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @('Invoke-ServerAudit')
+}

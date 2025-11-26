@@ -324,6 +324,30 @@ cd ServerAuditToolkitv2
 .\Invoke-ServerAudit.ps1 -ComputerName "SERVER01"
 ```
 
+#### Import the module from a local clone
+
+If you prefer to load the toolkit as a module (for auto-completion, dot-sourcing, or calling `Invoke-ServerAudit` like any other command), import it directly from the cloned folder:
+
+```powershell
+git clone https://github.com/tonynash74/ServerAuditToolkitv2.git
+Set-Location .\ServerAuditToolkitv2
+
+# Unblock files if SmartScreen tagged the download
+Get-ChildItem -Recurse -Filter *.ps1 | Unblock-File
+
+# Import the module manifest from disk (loads public functions + private helpers)
+Import-Module (Join-Path $PWD 'ServerAuditToolkitV2.psd1') -Force
+
+# Verify the module is available and list exported commands
+Get-Module ServerAuditToolkitV2
+Get-Command -Module ServerAuditToolkitV2
+
+# Now run the orchestrator via the module command name
+Invoke-ServerAudit -ComputerName 'SERVER01' -DryRun
+```
+
+> Tip: Run the import inside the same PowerShell session you plan to use for audits. If you move the toolkit folder, re-import using the new path or export it with `Save-Module` to a location in `$env:PSModulePath`.
+
 ### Option 2: PowerShell Gallery (Future)
 
 ```powershell
