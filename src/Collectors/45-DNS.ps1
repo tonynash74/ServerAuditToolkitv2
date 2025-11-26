@@ -1,6 +1,10 @@
 ﻿function Get-SATDNS {
   [CmdletBinding()]
-  param([string[]]$ComputerName,[hashtable]$Capability)
+  param(
+    [string[]]$ComputerName,
+    [hashtable]$Capability,
+    [System.Management.Automation.PSCredential]$Credential
+  )
 
   $out = @{}
   foreach ($c in $ComputerName) {
@@ -16,7 +20,16 @@
           try { $fw = Get-DnsServerForwarder -ErrorAction SilentlyContinue | Select-Object IPAddress, UseRootHint } catch {}
           $res = @{}; $res["Zones"]=$zones; $res["Forwarders"]=$fw; $res["Notes"]='DnsServer module'; return $res
         }
-        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
+        
+        $invokeParams = @{
+          ComputerName = $c
+          ScriptBlock  = $scr
+        }
+        if ($PSBoundParameters.ContainsKey('Credential')) {
+          $invokeParams['Credential'] = $Credential
+        }
+        
+        $res = Invoke-Command @invokeParams
         $out[$c] = $res
       } else {
         # WMI provider on DNS servers
@@ -35,8 +48,29 @@
           } catch {}
           $res = @{}; $res["Zones"]=$zones; $res["Forwarders"]=@(); $res["Notes"]='WMI root\MicrosoftDNS'; return $res
         }
-        $res = Invoke-Command -ComputerName $c -ScriptBlock $scr
+        
+        $invokeParams = @{
+          ComputerName = $c
+          ScriptBlock  = $scr
+        }
+        if ($PSBoundParameters.ContainsKey('Credential')) {
+          $invokeParams['Credential'] = $Credential
+        }
+        
+        $res = Invoke-Command @invokeParams
         $out[$c] = $res
+      }
+    } catch [System.UnauthorizedAccessException] {
+      Write-Log Error ("DNS collector — Access denied on {0}. Verify credentials and admin privileges." -f $c)
+      $out[$c] = @{ 
+        Error = "Authorization failed. User must be in Administrators group."
+        ErrorType = 'AuthenticationFailure'
+      }
+    } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
+      Write-Log Error ("DNS collector — WinRM connection failed on {0}" -f $c)
+      $out[$c] = @{ 
+        Error = "WinRM connection failed. Ensure WinRM is enabled and firewall allows port 5985/5986."
+        ErrorType = 'ConnectionFailure'
       }
     } catch {
       Write-Log Error ("DNS collector failed on {0} : {1}" -f $c, $_.Exception.Message)

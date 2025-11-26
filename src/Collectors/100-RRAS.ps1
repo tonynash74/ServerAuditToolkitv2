@@ -1,6 +1,10 @@
 function Get-SATRRAS {
   [CmdletBinding()]
-  param([string[]]$ComputerName,[hashtable]$Capability)
+  param(
+    [string[]]$ComputerName,
+    [hashtable]$Capability,
+    [System.Management.Automation.PSCredential]$Credential
+  )
 
   $out=@{}
   foreach ($c in $ComputerName) {
@@ -66,7 +70,40 @@ function Get-SATRRAS {
         $res.Notes = $used
         return $res
       }
-      $out[$c] = Invoke-Command -ComputerName $c -ScriptBlock $scr
+
+      # Build invoke parameters with credential support
+      $invokeParams = @{
+        ComputerName = $c
+        ScriptBlock  = $scr
+      }
+      
+      if ($PSBoundParameters.ContainsKey('Credential')) {
+        $invokeParams['Credential'] = $Credential
+      }
+      
+      $out[$c] = Invoke-Command @invokeParams
+    } catch [System.UnauthorizedAccessException] {
+      Write-Log Error ("RRAS collector — Access denied on {0}. Verify credentials and admin privileges." -f $c)
+      $out[$c] = @{ 
+        ServiceState = $null
+        Mode         = $null
+        Ports        = $null
+        ActiveVPN    = $null
+        Notes        = 'access denied'
+        Error        = "Authorization failed. User must be in Administrators group."
+        ErrorType    = 'AuthenticationFailure'
+      }
+    } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
+      Write-Log Error ("RRAS collector — WinRM connection failed on {0}" -f $c)
+      $out[$c] = @{ 
+        ServiceState = $null
+        Mode         = $null
+        Ports        = $null
+        ActiveVPN    = $null
+        Notes        = 'connection failed'
+        Error        = "WinRM connection failed. Ensure WinRM is enabled and firewall allows port 5985/5986."
+        ErrorType    = 'ConnectionFailure'
+      }
     } catch {
       Write-Log Error ("RRAS collector failed on {0}: {1}" -f $c,$_.Exception.Message)
       $out[$c] = @{ ServiceState=$null; Mode=$null; Ports=$null; ActiveVPN=$null; Notes='collector exception'; Error=$_.Exception.Message }
