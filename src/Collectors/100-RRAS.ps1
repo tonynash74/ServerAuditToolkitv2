@@ -81,7 +81,9 @@ function Get-SATRRAS {
         $invokeParams['Credential'] = $Credential
       }
       
-      $out[$c] = Invoke-Command @invokeParams
+      $res = Invoke-WithRetry -Command {
+        Invoke-Command @invokeParams
+      } -Description "RRAS inventory on $c" -MaxRetries 3
     } catch [System.UnauthorizedAccessException] {
       Write-Log Error ("RRAS collector — Access denied on {0}. Verify credentials and admin privileges." -f $c)
       $out[$c] = @{ 

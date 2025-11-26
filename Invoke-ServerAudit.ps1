@@ -240,7 +240,9 @@ function Invoke-ServerAudit {
                     
                     try {
                         Write-AuditLog "Profiling $server..." -Level Verbose
-                        $profile = Get-ServerCapabilities -ComputerName $server -UseCache:$true
+                        $profile = Invoke-WithRetry -Command {
+                            Get-ServerCapabilities -ComputerName $server -UseCache:$true
+                        } -Description "Server profiling on $server" -MaxRetries 3
 
                         if ($profile.Success) {
                             Write-AuditLog "Profile complete: Tier=$($profile.PerformanceTier), Jobs=$($profile.SafeParallelJobs), Timeout=$($profile.JobTimeoutSec)s" -Level Information

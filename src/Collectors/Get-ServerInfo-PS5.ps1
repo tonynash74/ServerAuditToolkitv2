@@ -108,7 +108,9 @@ function Get-ServerInfo-PS5 {
         try {
             # PS5.1+ CIM (faster)
             if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) {
-                $osData = Get-CimInstance -ClassName Win32_OperatingSystem @cimParams | Select-Object -First 1
+                $osData = Invoke-WithRetry -Command {
+                    Get-CimInstance -ClassName Win32_OperatingSystem @cimParams | Select-Object -First 1
+                } -Description "OS info collection on $ComputerName" -MaxRetries 3
                 
                 $result.Data.OperatingSystem = @{
                     ComputerName          = $osData.CSName

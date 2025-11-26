@@ -57,7 +57,9 @@
           $invokeParams['Credential'] = $Credential
         }
         
-        $res = Invoke-Command @invokeParams
+        $res = Invoke-WithRetry -Command {
+          Invoke-Command @invokeParams
+        } -Description "DNS inventory on $c (WMI provider)" -MaxRetries 3
         $out[$c] = $res
       }
     } catch [System.UnauthorizedAccessException] {
