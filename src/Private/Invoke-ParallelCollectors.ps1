@@ -97,7 +97,9 @@ function Invoke-ParallelCollectors {
 
         # Verify PowerShell version supports job management
         $psVersion = $PSVersionTable.PSVersion.Major
+        $psMinorVersion = $PSVersionTable.PSVersion.Minor
         $supportsJobMgmt = $psVersion -ge 3
+        $supportsPS7Parallel = ($psVersion -ge 7)
     }
 
     process {
@@ -148,7 +150,60 @@ function Invoke-ParallelCollectors {
             return $results
         }
 
-        # PS 3.0+ parallel job management
+        # PS 7.x: Use true parallel execution with ForEach-Object -Parallel
+        if ($supportsPS7Parallel) {
+            Write-Verbose "PowerShell 7.x detected; using ForEach-Object -Parallel with ThrottleLimit=$MaxConcurrentJobs"
+            
+            $parallelResults = @()
+            $sessionStartTime = Get-Date
+            
+            $Servers | ForEach-Object -ThrottleLimit $MaxConcurrentJobs -Parallel {
+                $server = $_
+                $collectors = $using:Collectors
+                $jobTimeoutSeconds = $using:JobTimeoutSeconds
+                $sessionStartTime = $using:sessionStartTime
+                
+                foreach ($collector in $collectors) {
+                    $startTime = Get-Date
+                    try {
+                        $output = Invoke-Command -ComputerName $server -ScriptBlock $collector -ErrorAction Stop
+                        $duration = (Get-Date) - $startTime
+
+                        [PSCustomObject]@{
+                            ServerName    = $server
+                            CollectorName = $collector.Name
+                            Status        = 'Success'
+                            Duration      = $duration
+                            Output        = $output
+                            ExecutedAt    = $startTime.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+                        }
+                    }
+                    catch {
+                        $duration = (Get-Date) - $startTime
+                        [PSCustomObject]@{
+                            ServerName    = $server
+                            CollectorName = $collector.Name
+                            Status        = 'Failed'
+                            Duration      = $duration
+                            Error         = $_.Exception.Message
+                            ExecutedAt    = $startTime.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+                        }
+                    }
+                }
+            } | ForEach-Object {
+                $results += $_
+                if ($ResultCallback) {
+                    & $ResultCallback $_
+                }
+            }
+            
+            $totalDuration = (Get-Date) - $sessionStartTime
+            Write-Verbose "PS7 parallel execution completed in $($totalDuration.TotalSeconds) seconds (vs sequential ~$($results.Count * 5)s)"
+            
+            return $results
+        }
+
+        # PS 3.0-6.x parallel job management (original runspace pool approach)
         $jobIndex = 0
 
         foreach ($server in $Servers) {
