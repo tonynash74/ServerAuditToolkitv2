@@ -224,8 +224,9 @@ function Get-SATDataDiscovery {
 
       $out[$c] = Invoke-Command -ComputerName $c -ScriptBlock $scr
     } catch {
-      Write-Log Error ("Data discovery collector failed on {0} : {1}" -f $c, $_.Exception.Message)
-      $out[$c] = @{ Shares=@(); Folders=@(); FileTypes=@(); Error=$_.Exception.Message; Notes='collector exception' }
+      $error = Convert-AuditError -ErrorRecord $_ -Context "Data discovery on $c"
+      Write-Log Error ("Data discovery collector failed on {0}: {1}. Remediation: {2}" -f $c, $error.Message, $error.Remediation)
+      $out[$c] = @{ Shares=@(); Folders=@(); FileTypes=@(); Error=$error.Message; ErrorType=$error.Category; ErrorDetails=$error.Remediation; Notes='collector exception' }
     }
   }
   return $out

@@ -10,6 +10,225 @@
     "maxConcurrentCollectors": 2,
     "timeout": {
       "default": 30,
+      "collectorTimeouts": {
+        "Get-ServerInfo": {
+          "timeoutPs2": 25,
+          "timeoutPs5": 10,
+          "timeoutPs7": 8,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-ServerInfo-PS5": {
+          "timeoutPs2": 25,
+          "timeoutPs5": 10,
+          "timeoutPs7": 8,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-ServerInfo-PS7": {
+          "timeoutPs2": 25,
+          "timeoutPs5": 10,
+          "timeoutPs7": 8,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-Services": {
+          "timeoutPs2": 20,
+          "timeoutPs5": 8,
+          "timeoutPs7": 5,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-Services-PS5": {
+          "timeoutPs2": 20,
+          "timeoutPs5": 8,
+          "timeoutPs7": 5,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-Services-PS7": {
+          "timeoutPs2": 20,
+          "timeoutPs5": 8,
+          "timeoutPs7": 5,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-IISInfo": {
+          "timeoutPs2": 60,
+          "timeoutPs5": 30,
+          "timeoutPs7": 20,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-IISInfo-PS5": {
+          "timeoutPs2": 60,
+          "timeoutPs5": 30,
+          "timeoutPs7": 20,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-IISInfo-PS7": {
+          "timeoutPs2": 60,
+          "timeoutPs5": 30,
+          "timeoutPs7": 20,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-SQLServerInfo": {
+          "timeoutPs2": 90,
+          "timeoutPs5": 40,
+          "timeoutPs7": 30,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-SQLServerInfo-PS5": {
+          "timeoutPs2": 90,
+          "timeoutPs5": 40,
+          "timeoutPs7": 30,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-ADInfo": {
+          "timeoutPs2": 45,
+          "timeoutPs5": 20,
+          "timeoutPs7": 15,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-ADInfo-PS5": {
+          "timeoutPs2": 45,
+          "timeoutPs5": 20,
+          "timeoutPs7": 15,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-HyperVInfo": {
+          "timeoutPs2": 60,
+          "timeoutPs5": 30,
+          "timeoutPs7": 20,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-HyperVInfo-PS5": {
+          "timeoutPs2": 60,
+          "timeoutPs5": 30,
+          "timeoutPs7": 20,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-HyperVInfo-PS7": {
+          "timeoutPs2": 60,
+          "timeoutPs5": 30,
+          "timeoutPs7": 20,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-DNSInfo": {
+          "timeoutPs2": 30,
+          "timeoutPs5": 15,
+          "timeoutPs7": 10,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-DHCPInfo": {
+          "timeoutPs2": 60,
+          "timeoutPs5": 30,
+          "timeoutPs7": 20,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-ExchangeInfo": {
+          "timeoutPs2": 90,
+          "timeoutPs5": 45,
+          "timeoutPs7": 30,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-SharePointInfo": {
+          "timeoutPs2": 120,
+          "timeoutPs5": 60,
+          "timeoutPs7": 45,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "Get-Certificates": {
+          "timeoutPs2": 30,
+          "timeoutPs5": 15,
+          "timeoutPs7": 10,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-InstalledApps": {
+          "timeoutPs2": 45,
+          "timeoutPs5": 20,
+          "timeoutPs7": 15,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "Get-InstalledApps-PS5": {
+          "timeoutPs2": 45,
+          "timeoutPs5": 20,
+          "timeoutPs7": 15,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "85-DataDiscovery": {
+          "timeoutPs2": 300,
+          "timeoutPs5": 180,
+          "timeoutPs7": 120,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "85-ScheduledTasks": {
+          "timeoutPs2": 30,
+          "timeoutPs5": 15,
+          "timeoutPs7": 10,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "90-LocalAccounts": {
+          "timeoutPs2": 15,
+          "timeoutPs5": 8,
+          "timeoutPs7": 5,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "95-Printers": {
+          "timeoutPs2": 45,
+          "timeoutPs5": 20,
+          "timeoutPs7": 15,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "96-Exchange": {
+          "timeoutPs2": 90,
+          "timeoutPs5": 45,
+          "timeoutPs7": 30,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "97-SQLServer": {
+          "timeoutPs2": 90,
+          "timeoutPs5": 40,
+          "timeoutPs7": 30,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        },
+        "98-WSUS": {
+          "timeoutPs2": 45,
+          "timeoutPs5": 20,
+          "timeoutPs7": 15,
+          "adaptive": true,
+          "slowServerMultiplier": 1.5
+        },
+        "99-SharePoint": {
+          "timeoutPs2": 120,
+          "timeoutPs5": 60,
+          "timeoutPs7": 45,
+          "adaptive": true,
+          "slowServerMultiplier": 2.0
+        }
+      },
       "byCollector": {
         "Get-ServerInfo": 25,
         "Get-ServerInfo-PS5": 10,

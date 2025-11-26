@@ -40,6 +40,7 @@ function Get-ServerInfo-PS5 {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$false, ValueFromPipeline=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$ComputerName = $env:COMPUTERNAME,
 
         [Parameter(Mandatory=$false)]
@@ -108,7 +109,9 @@ function Get-ServerInfo-PS5 {
         try {
             # PS5.1+ CIM (faster)
             if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) {
-                $osData = Get-CimInstance -ClassName Win32_OperatingSystem @cimParams | Select-Object -First 1
+                $osData = Invoke-WithRetry -Command {
+                    Get-CimInstance -ClassName Win32_OperatingSystem @cimParams | Select-Object -First 1
+                } -Description "OS info collection on $ComputerName" -MaxRetries 3
                 
                 $result.Data.OperatingSystem = @{
                     ComputerName          = $osData.CSName
@@ -283,13 +286,16 @@ function Get-ServerInfo-PS5 {
         $result.Success = $true
 
     } catch [System.UnauthorizedAccessException] {
-        $result.Errors += "Access Denied collecting from $ComputerName"
+        $error = Convert-AuditError -ErrorRecord $_ -Context "ServerInfo collection from $ComputerName"
+        $result.Errors += ("Access Denied: {0}. {1}" -f $error.Message, $error.Remediation)
 
     } catch [System.Net.NetworkInformation.PingException] {
-        $result.Errors += "Network unreachable: $ComputerName"
+        $error = Convert-AuditError -ErrorRecord $_ -Context "ServerInfo network test for $ComputerName"
+        $result.Errors += ("Network unreachable: {0}. {1}" -f $error.Message, $error.Remediation)
 
     } catch {
-        $result.Errors += "Unexpected error: $_"
+        $error = Convert-AuditError -ErrorRecord $_ -Context "ServerInfo collection from $ComputerName"
+        $result.Errors += ("Unexpected error: {0}. {1}" -f $error.Message, $error.Remediation)
 
     } finally {
         $stopwatch.Stop()
