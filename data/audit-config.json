@@ -295,10 +295,17 @@
     "retryDelaySeconds": 2,
     "connectionTimeoutSeconds": 30,
     "retryStrategy": "exponential",
-    "description_retryStrategy": "exponential: exponential backoff; linear: constant delay between retries",
-    "dnsRetryAttempts": 2,
+    "description_retryStrategy": "exponential: exponential backoff (1s, 2s, 4s); linear: constant delay between retries",
+    "dnsRetryAttempts": 3,
+    "description_dnsRetryAttempts": "M-008: DNS resolution retry attempts before failing",
+    "dnsRetryBackoff": "exponential",
+    "description_dnsRetryBackoff": "M-008: DNS retry backoff strategy (exponential recommended)",
     "connectionPoolSize": 5,
-    "description_connectionPoolSize": "Reuse WinRM sessions for up to N concurrent connections"
+    "description_connectionPoolSize": "M-008: WinRM session pool size - reuse sessions for faster multi-server audits",
+    "sessionPoolTTL": 600,
+    "description_sessionPoolTTL": "M-008: Session pool entry TTL in seconds (10 minutes default for session reuse window)",
+    "sessionTimeout": 300,
+    "description_sessionTimeout": "WinRM session timeout in seconds (5 minutes default)"
   },
   "output": {
     "formats": [
