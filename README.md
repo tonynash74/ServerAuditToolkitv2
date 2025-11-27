@@ -410,7 +410,7 @@ This repository contains a PowerShell module layout with `ServerAuditToolkitV2.p
 
 ```powershell
 # From the repository root on the target machine
-.\scripts\Install-LocalModule.ps1 -Force
+.\Install-LocalModule.ps1 -Force
 
 # Then import by name
 Import-Module ServerAuditToolkitV2

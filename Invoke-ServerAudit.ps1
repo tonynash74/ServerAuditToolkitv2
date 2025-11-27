@@ -210,8 +210,8 @@ if (-not $moduleImported) {
     $readmePath = $readmePathCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
     $installScriptCandidates = @(
-        Join-Path -Path $PSScriptRoot -ChildPath 'scripts\Install-LocalModule.ps1',
-        Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'scripts\Install-LocalModule.ps1'
+        Join-Path -Path $PSScriptRoot -ChildPath 'Install-LocalModule.ps1',
+        Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'Install-LocalModule.ps1'
     )
     $installScript = $installScriptCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
