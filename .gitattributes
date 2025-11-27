@@ -4,3 +4,25 @@
 # Exclude internal developer notes from archive/export (e.g., GitHub zip/`git archive`)
 devnotes/ export-ignore
 devnotes/** export-ignore
+\n+# Internal development & planning docs (exclude from release archives)
+docs/CODE-REVIEW-* export-ignore
+docs/CRITICAL-FIXES-IMPLEMENTATION.md export-ignore
+docs/DOCUMENTATION-CORRECTIONS-COMPLETE.md export-ignore
+docs/FINAL-HANDOFF-REPORT.md export-ignore
+docs/HIGH-PRIORITY-FIXES-PLAN.md export-ignore
+docs/IMPLEMENTATION-SUMMARY.md export-ignore
+docs/PROJECT-COMPLETION-SUMMARY.md export-ignore
+docs/README-CRITICAL-FIXES.md export-ignore
+docs/SESSION-* export-ignore
+docs/PR-* export-ignore
+docs/performance-profile-schema.md export-ignore
+docs/T[1-5]-* export-ignore
+docs/PHASE-3-PROJECT-PLAN.md export-ignore
+docs/PHASE-3-PROGRESS-SUMMARY.md export-ignore
+docs/PHASE-3-FINAL-COMPLETION.md export-ignore
+docs/PHASE-2-EXECUTION-PLAN.md export-ignore
+docs/PHASE-2-LAUNCH-SUMMARY.md export-ignore
+docs/SPRINT-* export-ignore
+docs/DEVELOPERS-PHASE3.md export-ignore
+docs/DEVELOPMENT.md export-ignore
+docs/LINKS-ENGINE-POC-GUIDE.md export-ignore
