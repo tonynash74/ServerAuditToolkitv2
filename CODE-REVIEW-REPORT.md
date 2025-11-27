@@ -331,105 +331,20 @@ Functions accept string parameters but don't validate format/content.
 ```powershell
 # Validate computer name
 if ($ComputerName -and $ComputerName.Length -eq 0) {
-    throw "ComputerName cannot be empty"
-}
+    ````markdown
+    This file has been moved to `devnotes/ServerAuditToolkitv2/CODE-REVIEW-REPORT.md`.
 
-if ($ComputerName -match '[^a-zA-Z0-9.-]') {
-    throw "ComputerName contains invalid characters: $_"
-}
+    To avoid exposing internal code-review findings and remediation guidance in client downloads, the full report was relocated to the `devnotes/ServerAuditToolkitv2/` folder.
 
-# Validate paths
-if ($OutputPath -and -not [System.IO.Path]::IsPathRooted($OutputPath)) {
-    throw "OutputPath must be absolute: $OutputPath"
-}
-```
+    If you need to access the detailed report, open:
 
-**Impact**: Prevents downstream errors; improves debugging  
-**Priority**: HIGH  
-**Estimated Implementation**: 2-3 hours
+    ```
+    devnotes/ServerAuditToolkitv2/CODE-REVIEW-REPORT.md
+    ```
 
----
+    If you believe this file should remain at the repo root, please let the maintainers know.
 
-## ⚠️ HIGH-004: Hardcoded Paths in Data Discovery Collector
-
-**Category**: Maintainability / Configuration  
-**Files Affected**: `src/Collectors/85-DataDiscovery.ps1` (lines 195-210)
-
-**Issue**:
-Binary and document file extensions are hardcoded in collector. No way to customize via config.
-
-**Current Code**:
-```powershell
-$binExts = @('.exe','.dll','.msi','.bat','.cmd','.ps1','.vbs','.js','.jar','.com')
-$docExts = @('.doc','.docx','.xls','.xlsx','.ppt','.pptx','.pdf','.rtf','.txt','.csv','.vsd','.vsdx')
-```
-
-**Problem**:
-- Adding new extensions requires code change
-- No way to exclude extensions per environment
-- CSV vs XLSX handling not configurable
-
-**Recommended Fix**:
-Move to `audit-config.json`:
-```json
-"dataDiscovery": {
-    "binaryExtensions": [".exe", ".dll", ".msi", "..."],
-    "documentExtensions": [".doc", ".docx", "..."],
-    "maxFilesPerShare": 200000,
-    "maxExtensionsTracked": 50
-}
-```
-
-**Impact**: Better operational flexibility; easier to maintain  
-**Priority**: HIGH  
-**Estimated Implementation**: 1 hour
-
----
-
-# PART 3: MEDIUM-PRIORITY FINDINGS
-
-## 🟡 MEDIUM-001: N+1 Query Pattern in Data Discovery Collector
-
-**Category**: Performance  
-**Files Affected**: `src/Collectors/85-DataDiscovery.ps1` (lines 150-200)
-
-**Issue**:
-Collector enumerates 200,000+ files sequentially and recalculates age category for each file.
-
-**Current Code**:
-```powershell
-foreach ($fp in $enum) {
-    if ($totalFiles -ge $maxFilesPerShare) { break }
-    try {
-        $fi = New-Object System.IO.FileInfo($fp)
-        $lw = $null; try { $lw = $fi.LastWriteTime } catch {}
-        $age = ($now - $lw).Days        # ⚠️ Calculated for each file
-        if ($age -le 30) { $hot++ }     # ⚠️ Repeated logic
-        elseif ($age -le 180) { $warm++ }
-        # ... rest of categorization
-    }
-}
-```
-
-**Optimization**:
-```powershell
-# Pre-calculate cutoff dates once
-$hot30   = (Get-Date).AddDays(-30)
-$warm180 = (Get-Date).AddDays(-180)
-$cold365 = (Get-Date).AddDays(-365)
-
-foreach ($fp in $enum) {
-    # ... 
-    $lw = $fi.LastWriteTime
-    if ($lw -gt $hot30)       { $hot++ }
-    elseif ($lw -gt $warm180) { $warm++ }
-    elseif ($lw -gt $cold365) { $cold++ }
-    else                        { $frozen++ }
-}
-```
-
-**Performance Gain**: ~15-20% faster on large shares  
-**Priority**: MEDIUM  
+    ````
 **Estimated Implementation**: 30 minutes
 
 ---

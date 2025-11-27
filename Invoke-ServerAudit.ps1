@@ -425,13 +425,47 @@ function Invoke-ServerAudit {
         $auditSession.Config = $config
 
         # Resolve collector path
+        # Support running the script from different working directories (e.g. a tools folder)
         if ([string]::IsNullOrEmpty($CollectorPath)) {
+            $cwd = (Get-Location).ProviderPath
             $collectorCandidates = @(
                 (Join-Path -Path $PSScriptRoot -ChildPath 'src\Collectors'),
-                (Join-Path -Path $PSScriptRoot -ChildPath '..\collectors')
+                (Join-Path -Path $PSScriptRoot -ChildPath '..\collectors'),
+                (Join-Path -Path $cwd -ChildPath 'tools\ServerAuditToolkitv2\collectors'),
+                (Join-Path -Path $cwd -ChildPath 'tools\collectors'),
+                (Join-Path -Path $cwd -ChildPath 'collectors'),
+                (Join-Path -Path $cwd -ChildPath 'ServerAuditToolkitv2\collectors'),
+                (Join-Path -Path $env:ProgramData -ChildPath 'ServerAuditToolkitv2\collectors')
             )
 
-            $CollectorPath = $collectorCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+            if ($env:SAT_COLLECTOR_PATH) { $collectorCandidates += $env:SAT_COLLECTOR_PATH }
+
+            # Resolve any candidate paths (handle relative paths gracefully)
+            $CollectorPath = $null
+            foreach ($cand in $collectorCandidates) {
+                if (-not $cand) { continue }
+                try {
+                    $resolved = Resolve-Path -LiteralPath $cand -ErrorAction Stop
+                    if ($resolved) { $CollectorPath = $resolved.ProviderPath; break }
+                } catch {
+                    # ignore and continue searching
+                }
+            }
+        } else {
+            # User provided a CollectorPath - resolve absolute/relative references
+            try {
+                $resolved = Resolve-Path -LiteralPath $CollectorPath -ErrorAction Stop
+                $CollectorPath = $resolved.ProviderPath
+            } catch {
+                # Try resolving relative to the script location
+                try {
+                    $candidate = Join-Path -Path $PSScriptRoot -ChildPath $CollectorPath
+                    $resolved = Resolve-Path -LiteralPath $candidate -ErrorAction Stop
+                    $CollectorPath = $resolved.ProviderPath
+                } catch {
+                    Write-AuditLog "Collector path provided but not found: $CollectorPath" -Level Warning
+                }
+            }
         }
 
         if (-not $CollectorPath -or -not (Test-Path -LiteralPath $CollectorPath)) {

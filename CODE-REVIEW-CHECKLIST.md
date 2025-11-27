@@ -109,54 +109,20 @@ Invoke-ServerAudit -ComputerName "DOMAIN\SERVER01" -Credential $cred
 - [ ] Handle specific exceptions: SocketException, PSRemotingTransportException, TimeoutException
 - [ ] Test with network interruption
 
-**Test Scenario**:
-```powershell
-# Simulate transient failure
-$command = { throw [System.Net.Sockets.SocketException]::new() }
-Invoke-WithRetry -Command $command -MaxRetries 3  # Should retry and fail after 3 attempts
+````markdown
+This file has been moved to `devnotes/ServerAuditToolkitv2/CODE-REVIEW-CHECKLIST.md`.
+
+The checklist contains internal implementation and testing steps. To avoid exposing internal remediation checklists in client downloads, the full checklist was relocated to the `devnotes/ServerAuditToolkitv2/` folder.
+
+Open the internal checklist here:
+
+```
+devnotes/ServerAuditToolkitv2/CODE-REVIEW-CHECKLIST.md
 ```
 
----
+If you need this file restored to the repository root, please request approval from the project lead.
 
-### HIGH-002: Adaptive Timeout Calculation
-- [ ] Update `data/audit-config.json` with PS-version-specific timeouts
-- [ ] Create function `Get-AdaptiveTimeout` in `Invoke-ServerAudit.ps1`
-- [ ] Calculate timeout = baseTimeout × serverSlownessFactor
-- [ ] Apply to all collector invocations
-
-**Configuration Update**:
-```json
-"85-DataDiscovery": {
-  "ps2": 300,
-  "ps5": 150,
-  "ps7": 100
-}
-```
-
----
-
-### HIGH-003: Parameter Validation
-- [ ] Add `[ValidateScript()]` attributes to all function parameters
-- [ ] Validate ComputerName format (no special chars, length < 255)
-- [ ] Validate paths (if applicable)
-- [ ] Validate credentials not null
-
-**Template**:
-```powershell
-[ValidateScript({
-    if ([string]::IsNullOrWhiteSpace($_)) { throw "Cannot be empty" }
-    if ($_ -match '[<>:"/\\|?*]') { throw "Invalid characters" }
-    return $true
-})]
-[string]$ComputerName = $env:COMPUTERNAME
-```
-
----
-
-## 🟠 MEDIUM PRIORITY CHECKLIST (v2.2)
-
-### MEDIUM-001: N+1 Query Optimization
-- [ ] File: `src/Collectors/85-DataDiscovery.ps1`
+````
 - [ ] Pre-calculate cutoff dates OUTSIDE loop
 - [ ] Replace date calculation with date comparison
 - [ ] Benchmark: should see ~15-20% speedup

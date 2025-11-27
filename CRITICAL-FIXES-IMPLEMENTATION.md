@@ -6,151 +6,20 @@
 
 ---
 
-## CRITICAL-001: Credential Passing in Invoke-Command
+````markdown
+This file has been moved to `devnotes/ServerAuditToolkitv2/CRITICAL-FIXES-IMPLEMENTATION.md`.
 
-### Status: PARTIALLY COMPLETE ✓
-**Commits**: 
-- `c18a5bf`: Initial credential passing fixes to 100-RRAS.ps1 and 45-DNS.ps1
-- Includes proper error handling for AuthenticationFailure and ConnectionFailure
+The implementation log and tracking details were relocated to the `devnotes/ServerAuditToolkitv2/` folder to avoid exposing internal remediation tracking and branch plans in client downloads.
 
-### Files Updated (2/20+):
-- ✅ `src/Collectors/100-RRAS.ps1` — Added credential parameter and threading
-- ✅ `src/Collectors/45-DNS.ps1` — Added credential parameter and threading
+Open the internal implementation log here:
 
-### Files Still Requiring Update (18):
-- `src/Collectors/00-System.ps1`
-- `src/Collectors/20-Network.ps1` (if using Invoke-Command)
-- `src/Collectors/30-Storage.ps1`
-- `src/Collectors/50-DHCP.ps1`
-- `src/Collectors/55-SMB.ps1`
-- `src/Collectors/65-Print.ps1`
-- `src/Collectors/70-HyperV.ps1`
-- `src/Collectors/80-Certificates.ps1`
-- `src/Collectors/85-DataDiscovery.ps1`
-- `src/Collectors/85-ScheduledTasks.ps1`
-- `src/Collectors/86-LOBSignatures.ps1`
-- `src/Collectors/90-LocalAccounts.ps1`
-- `src/Collectors/95-Printers.ps1`
-- `src/Collectors/96-Exchange.ps1`
-- `src/Collectors/97-SQLServer.ps1`
-- `src/Collectors/98-WSUS.ps1`
-- `src/Collectors/99-SharePoint.ps1`
-- `src/Collectors/50-DHCP.ps1`
-
-### Implementation Pattern:
-```powershell
-# BEFORE (broken):
-function Get-SAT<Collector> {
-  param([string[]]$ComputerName, [hashtable]$Capability)
-  
-  $out[$c] = Invoke-Command -ComputerName $c -ScriptBlock $scr
-  # ❌ Credentials not passed
-}
-
-# AFTER (fixed):
-function Get-SAT<Collector> {
-  param(
-    [string[]]$ComputerName,
-    [hashtable]$Capability,
-    [System.Management.Automation.PSCredential]$Credential  # ← ADD
-  )
-  
-  $invokeParams = @{
-    ComputerName = $c
-    ScriptBlock  = $scr
-  }
-  
-  if ($PSBoundParameters.ContainsKey('Credential')) {
-    $invokeParams['Credential'] = $Credential
-  }
-  
-  $out[$c] = Invoke-Command @invokeParams
-  # ✅ Credentials properly passed
-}
+```
+devnotes/ServerAuditToolkitv2/CRITICAL-FIXES-IMPLEMENTATION.md
 ```
 
-### Next Steps:
-- [ ] Apply pattern to remaining 18 collectors
-- [ ] Add unit tests for credential passing
-- [ ] Test on cross-domain scenarios
-- [ ] Create PR: "fix(critical-001-complete): Add credential passing to all collectors"
+If you need this file restored to the repository root, please request approval from the project lead.
 
----
-
-## CRITICAL-002: WMI Date Conversion Error
-
-### Status: COMPLETE ✓
-**Commit**: `c18a5bf`
-
-### Files Updated:
-- ✅ `src/Collectors/Get-ServerInfo-PS5.ps1` — Lines 141-175
-
-### Changes:
-- Replaced non-existent `$osData.ConvertToDateTime()` with `[System.Management.ManagementDateTimeConverter]::ToDateTime()`
-- Added `ConvertWmiDate()` helper function for null-safety
-- Wrapped WMI fallback in try-catch
-- All datetime conversions now safe and serializable
-
-### Testing Checklist:
-- [ ] Run on PS 2.0 with CIM unavailable
-- [ ] Verify dates serialize to JSON correctly
-- [ ] Check null handling works
-- [ ] Validate on Windows Server 2008 R2
-
-### Impact: HIGH
-- Fixes silent corruption of audit results
-- Prevents JSON export failures
-- Enables PS 5.1+ variant to work on legacy servers
-
----
-
-## CRITICAL-003: COM Object Serialization
-
-### Status: COMPLETE ✓
-**Commit**: `c18a5bf`
-
-### Files Updated:
-- ✅ `src/Collectors/Get-IISInfo.ps1` — Lines 103-162
-
-### Changes:
-- All COM objects cast to safe types (string, int, bool, datetime)
-- Added null checks for optional COM properties
-- Certificate hash properly converted via `BitConverter.ToString()`
-- Collections wrapped in `@()` for consistency
-- All properties now JSON-serializable
-
-### Example:
-```powershell
-# BEFORE (breaks serialization):
-$siteBindings += @{
-    Protocol = $binding.Protocol  # ❌ COM object
-}
-
-# AFTER (serialization safe):
-$siteBindings += @{
-    Protocol = [string]($binding.Protocol)  # ✅ String
-}
-```
-
-### Testing Checklist:
-- [ ] Verify IIS collector on PS 2.0 (remote)
-- [ ] Verify IIS collector on PS 5.1 (remote)
-- [ ] Check JSON output is valid
-- [ ] Validate no "Object of type" serialization errors
-
-### Impact: HIGH
-- Fixes complete IIS collection failure on PS 2.0/4.0
-- Enables PS5+ variant to work remotely
-- Resolves JSON export crashes
-
----
-
-## CRITICAL-004: Unhandled Remote Execution Credential Context
-
-### Status: PENDING
-**Files Affected**: `src/ServerAuditToolkitV2.psm1` (lines 85-120)
-
-### Issue:
+````
 Module-level `Invoke-Command` in orchestrator doesn't handle credential threading properly.
 
 ### Implementation Required:

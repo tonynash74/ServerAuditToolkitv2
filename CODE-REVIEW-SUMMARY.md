@@ -55,98 +55,20 @@
 ### CRITICAL-002: WMI Date Conversion Error
 **Severity**: BLOCKER  
 **Impact**: JSON export fails when CIM unavailable  
-**Files**: Get-ServerInfo-PS5.ps1  
-**Fix Time**: 30 minutes  
-**Action**: Replace `ConvertToDateTime()` with `[Management.ManagementDateTimeConverter]::ToDateTime()`
+````markdown
+This file has been moved to `devnotes/ServerAuditToolkitv2/CODE-REVIEW-SUMMARY.md`.
 
-### CRITICAL-003: COM Object Serialization
-**Severity**: BLOCKER  
-**Impact**: IIS collector returns empty data on PS2/4  
-**Files**: Get-IISInfo.ps1  
-**Fix Time**: 1-2 hours  
-**Action**: Normalize COM objects to hashtables before returning
+The executive summary is now stored under `devnotes/ServerAuditToolkitv2/` to avoid exposing internal assessment details in client downloads.
 
-### CRITICAL-004: Credential Context Lost
-**Severity**: HIGH (next release)  
-**Impact**: Cross-domain/MFA scenarios fail  
-**Files**: ServerAuditToolkitV2.psm1  
-**Fix Time**: 2-3 hours  
-**Action**: Thread credentials through all nested function calls
+Open the internal summary here:
 
----
-
-## ✅ WHAT'S WORKING WELL
-
-- ✅ **Architecture**: Three-stage pipeline (DISCOVER/PROFILE/EXECUTE) is clean and logical
-- ✅ **Version Management**: T1 framework handles PS 2.0 → 7.x nicely
-- ✅ **Documentation**: Comprehensive README with examples
-- ✅ **Error Handling**: Most collectors have try-catch blocks
-- ✅ **Modularity**: Collector-based design is extensible
-- ✅ **Performance**: CIM variants show good optimization thinking
-- ✅ **Code Organization**: Clear folder structure, metadata registration
-
----
-
-## 📋 DELIVERABLES INCLUDED
-
-### 1. **CODE-REVIEW-REPORT.md** (Main Report)
-- Comprehensive findings across 6 categories
-- 25+ specific issues with code examples
-- Prioritized fix roadmap
-- Testing checklist
-- Risk assessment
-
-### 2. **CODE-REVIEW-FIXES-GUIDE.md** (Implementation Guide)
-- Ready-to-use code fixes for all issues
-- Before/After code comparisons
-- Testing scripts for validation
-- Complete implementation templates
-
-### 3. **This Summary Document**
-- Quick reference guide
-- Priority matrix
-- Action items
-- Next steps
-
----
-
-## 🛠️ RECOMMENDED ACTION PLAN
-
-### Phase 1: Immediate Hotfix (v2.0.1) — 1 week
 ```
-Priority 1: Fix authentication/credential issues
-├─ CRITICAL-001: Credential passing in Invoke-Command
-├─ CRITICAL-004: Credential context threading
-└─ Impact: Multi-domain audits will work
-
-Priority 2: Fix serialization issues
-├─ CRITICAL-002: WMI date conversion
-├─ CRITICAL-003: COM object serialization
-└─ Impact: Data integrity guaranteed
-
-Estimated effort: 3-4 days for experienced engineer
+devnotes/ServerAuditToolkitv2/CODE-REVIEW-SUMMARY.md
 ```
 
-### Phase 2: Production Hardening (v2.1) — 2 weeks
-```
-Priority 3: Improve reliability
-├─ HIGH-001: WinRM retry logic
-├─ HIGH-003: Parameter validation
-└─ Impact: Better resilience on unstable networks
+If you need this file restored to the repository root, please request approval from the project lead.
 
-Priority 4: Performance & quality
-├─ HIGH-002: Adaptive timeouts
-├─ MEDIUM-003: Error standardization
-├─ MEDIUM-001: N+1 optimization
-└─ Impact: Better resource utilization
-
-Estimated effort: 1-2 weeks
-```
-
-### Phase 3: Documentation & Polish (v2.2) — 1 week
-```
-Update documentation
-├─ DOC-001: Fix version compatibility claims
+````
 ├─ DOC-002: Update Quick Start examples
 ├─ DOC-003: Add configuration reference
 ├─ DOC-004: Add remote execution troubleshooting

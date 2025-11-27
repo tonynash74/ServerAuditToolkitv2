@@ -47,55 +47,20 @@ This PR addresses three critical blocking issues discovered in code review that 
 $out[$c] = Invoke-Command -ComputerName $c -ScriptBlock $scr
 
 # After
-$invokeParams = @{
-  ComputerName = $c
-  ScriptBlock  = $scr
-}
-if ($PSBoundParameters.ContainsKey('Credential')) {
-  $invokeParams['Credential'] = $Credential
-}
-$out[$c] = Invoke-Command @invokeParams
+````markdown
+This file has been moved to `devnotes/ServerAuditToolkitv2/PR-001-CRITICAL-FIXES-PHASE1.md`.
+
+The PR metadata and description were relocated to the `devnotes/ServerAuditToolkitv2/` folder to avoid exposing detailed PR planning and branch information in client downloads.
+
+Open the internal PR note here:
+
+```
+devnotes/ServerAuditToolkitv2/PR-001-CRITICAL-FIXES-PHASE1.md
 ```
 
-**Testing**:
-- ✅ Credential threading verified
-- ✅ Null credential passes through
-- ✅ Exception handling tested
+If you need this file restored to the repository root, please request approval from the project lead.
 
-**Next Step**: Pattern to be applied to remaining 18 collectors in CRITICAL-001-COMPLETE PR
-
----
-
-### Commit 2: fix(CRITICAL-002)
-**Files**: 1  
-**Lines Changed**: +41, -18  
-**Affected Collector**: Get-ServerInfo-PS5.ps1
-
-**Issue**: Fallback code calls non-existent `$osData.ConvertToDateTime()` method
-
-**Root Cause**: ManagementObject doesn't have `ConvertToDateTime()` instance method. Should use `[System.Management.ManagementDateTimeConverter]::ToDateTime()` static method.
-
-**Fix**:
-- Create `ConvertWmiDate()` helper for null-safe conversion
-- Replace method calls with correct static conversion
-- Wrap WMI fallback in try-catch
-- Handle empty/null WMI dates gracefully
-
-**Example**:
-```powershell
-# Helper function
-function ConvertWmiDate {
-  param([string]$WmiDate)
-  if ([string]::IsNullOrEmpty($WmiDate)) { return $null }
-  try {
-    return [System.Management.ManagementDateTimeConverter]::ToDateTime($WmiDate)
-  } catch {
-    return $null
-  }
-}
-
-# Usage
-InstallDate = ConvertWmiDate $osData.InstallDate
+````
 ```
 
 **Testing**:

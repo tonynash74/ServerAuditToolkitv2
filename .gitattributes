@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Exclude internal developer notes from archive/export (e.g., GitHub zip/`git archive`)
+devnotes/ export-ignore
+devnotes/** export-ignore

@@ -215,11 +215,9 @@ function Invoke-ServerAudit {
   return $results
 }
 
-# Import core functions
-. $PSScriptRoot\core\Get-CollectorMetadata.ps1
-. $PSScriptRoot\core\Get-ServerCapabilities.ps1
-. $PSScriptRoot\core\Invoke-ServerAudit.ps1
-# ... existing imports ...
+# Note: collectors and private helpers are dot-sourced above from the 'Private' and 'Collectors' folders.
+# The legacy 'core\' folder is not used in this layout; avoid sourcing non-existent files which
+# break module import. If you have additional core scripts, place them under 'Private' or 'Collectors'.
 
 # Ensure all functions are exported
 Export-ModuleMember -Function @(
