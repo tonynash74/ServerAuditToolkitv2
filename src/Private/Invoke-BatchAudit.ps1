@@ -186,7 +186,7 @@ function Invoke-BatchAudit {
         $batchServers = $Servers[$startIdx..$endIdx]
         $serverCount = $batchServers.Count
 
-        Write-Verbose "Processing batch $batchNum/$totalBatches: servers $($startIdx+1)-$($endIdx+1) ($serverCount servers)"
+        Write-Verbose "Processing batch $batchNum/${totalBatches}: servers $($startIdx+1)-$($endIdx+1) ($serverCount servers)"
 
         # Execute batch via Invoke-ParallelCollectors
         $batchData = @{
@@ -369,8 +369,10 @@ function Get-BatchStatistics {
 }
 
 # Export functions
-Export-ModuleMember -Function @(
-    'Invoke-BatchAudit'
-    'Get-BatchCheckpoint'
-    'Get-BatchStatistics'
-)
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @(
+        'Invoke-BatchAudit',
+        'Get-BatchCheckpoint',
+        'Get-BatchStatistics'
+    )
+}

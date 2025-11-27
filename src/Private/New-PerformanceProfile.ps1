@@ -350,6 +350,8 @@ function New-PerformanceReportHTML {
     Write-Verbose "HTML performance report generated: $OutputPath"
 }
 
-Export-ModuleMember -Function @(
-    'New-PerformanceProfile'
-)
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @(
+        'New-PerformanceProfile'
+    )
+}

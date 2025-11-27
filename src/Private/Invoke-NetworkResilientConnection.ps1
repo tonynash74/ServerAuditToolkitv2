@@ -254,7 +254,7 @@ function Invoke-NetworkResilientConnection {
     $pool.Statistics.ConnectionAttempts++
     
     try {
-        Write-Verbose "Creating WinRM session to '$ComputerName:$Port' (resolved: '$resolvedHost')"
+        Write-Verbose "Creating WinRM session to '${ComputerName}:$Port' (resolved: '$resolvedHost')"
         
         $sessionParams = @{
             ComputerName = $resolvedHost
@@ -414,9 +414,11 @@ function Restore-SessionPoolConnection {
 # Export functions
 # ─────────────────────────────────────────────────────────────────────────
 
-Export-ModuleMember -Function @(
-    'Invoke-NetworkResilientConnection'
-    'Get-SessionPoolStatistics'
-    'Clear-SessionPool'
-    'Restore-SessionPoolConnection'
-)
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @(
+        'Invoke-NetworkResilientConnection',
+        'Get-SessionPoolStatistics',
+        'Clear-SessionPool',
+        'Restore-SessionPoolConnection'
+    )
+}

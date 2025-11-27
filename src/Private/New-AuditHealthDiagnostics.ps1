@@ -733,6 +733,8 @@ function New-HealthDiagnosticsHTML {
     return $html
 }
 
-Export-ModuleMember -Function @(
-    'New-AuditHealthDiagnostics'
-)
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @(
+        'New-AuditHealthDiagnostics'
+    )
+}

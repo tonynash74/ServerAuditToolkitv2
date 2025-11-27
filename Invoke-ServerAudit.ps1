@@ -166,42 +166,85 @@ param(
 )
 
 $moduleManifestPath = Join-Path -Path $PSScriptRoot -ChildPath 'ServerAuditToolkitV2.psd1'
-if (Test-Path -LiteralPath $moduleManifestPath) {
+$legacyCorePath = Join-Path -Path $PSScriptRoot -ChildPath 'src\core'
+if ((Test-Path -LiteralPath $moduleManifestPath) -and (Test-Path -LiteralPath $legacyCorePath)) {
     try {
         Import-Module -Name $moduleManifestPath -Force -ErrorAction Stop | Out-Null
     } catch {
         Write-Warning "Failed to import ServerAuditToolkitV2 module: $_"
     }
 } else {
-    Write-Warning "Module manifest not found at $moduleManifestPath."
+    Write-Verbose "Skipping module import (manifest: $moduleManifestPath, core path: $legacyCorePath)"
 }
 
-$MonitorScriptPath = Join-Path -Path $PSScriptRoot -ChildPath 'src\Private\Monitor-AuditResources.ps1'
-if (Test-Path -LiteralPath $MonitorScriptPath) {
-    . $MonitorScriptPath
-} else {
-    Write-Warning "Monitor-AuditResources.ps1 not found at $MonitorScriptPath. Resource auto-throttling will be unavailable."
+$helperScripts = @(
+    @{ RelativePath = 'src\Private\Monitor-AuditResources.ps1'; MissingMessage = 'Resource auto-throttling will be unavailable.' },
+    @{ RelativePath = 'src\Collectors\Get-CollectorMetadata.ps1'; MissingMessage = 'Collector discovery will fail.' },
+    @{ RelativePath = 'src\Private\Test-AuditParameters.ps1'; MissingMessage = 'Parameter validation will be skipped.' },
+    @{ RelativePath = 'src\Private\New-StreamingOutputWriter.ps1'; MissingMessage = 'Streaming output will be unavailable.' },
+    @{ RelativePath = 'src\Private\Test-AuditPrerequisites.ps1'; MissingMessage = 'Health checks will be skipped.' },
+    @{ RelativePath = 'src\Private\Invoke-BatchAudit.ps1'; MissingMessage = 'Batch processing will be unavailable.' },
+    @{ RelativePath = 'src\Private\Invoke-WithRetry.ps1'; MissingMessage = 'Retry helper unavailable; transient errors will not auto-retry.' },
+    @{ RelativePath = 'src\Private\Get-AdjustedTimeout.ps1'; MissingMessage = 'Collector-specific timeout adjustments will use defaults.' },
+    @{ RelativePath = 'src\Get-ServerCapabilities.ps1'; MissingMessage = 'Performance profiling (T2) will be unavailable.' }
+)
+
+foreach ($helper in $helperScripts) {
+    $helperPath = Join-Path -Path $PSScriptRoot -ChildPath $helper.RelativePath
+    if (Test-Path -LiteralPath $helperPath) {
+        try {
+            . $helperPath
+        } catch {
+            Write-Warning "Failed to load helper at $helperPath. $_"
+        }
+    } else {
+        Write-Warning "Helper script missing at $helperPath. $($helper.MissingMessage)"
+    }
 }
 
-$CollectorMetadataScriptPath = Join-Path -Path $PSScriptRoot -ChildPath 'src\Collectors\Get-CollectorMetadata.ps1'
-if (Test-Path -LiteralPath $CollectorMetadataScriptPath) {
-    . $CollectorMetadataScriptPath
-} else {
-    Write-Warning "Get-CollectorMetadata.ps1 not found at $CollectorMetadataScriptPath. Collector discovery will fail."
-}
+function ConvertTo-HashtableRecursive {
+    param(
+        [Parameter(Mandatory=$false)]
+        $InputObject
+    )
 
-$TestAuditParametersPath = Join-Path -Path $PSScriptRoot -ChildPath 'src\\Private\\Test-AuditParameters.ps1'
-if (Test-Path -LiteralPath $TestAuditParametersPath) {
-    . $TestAuditParametersPath
-} else {
-    Write-Warning "Test-AuditParameters.ps1 not found at $TestAuditParametersPath. Parameter validation will be skipped."
-}
+    if ($null -eq $InputObject) {
+        return $null
+    }
 
-$StreamingWriterPath = Join-Path -Path $PSScriptRoot -ChildPath 'src\\Private\\New-StreamingOutputWriter.ps1'
-if (Test-Path -LiteralPath $StreamingWriterPath) {
-    . $StreamingWriterPath
-} else {
-    Write-Warning "New-StreamingOutputWriter.ps1 not found at $StreamingWriterPath. Streaming output will be unavailable."
+    if ($InputObject -is [hashtable]) {
+        $clone = @{}
+        foreach ($key in $InputObject.Keys) {
+            $clone[$key] = ConvertTo-HashtableRecursive -InputObject $InputObject[$key]
+        }
+        return $clone
+    }
+
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        $converted = @{}
+        foreach ($key in $InputObject.Keys) {
+            $converted[$key] = ConvertTo-HashtableRecursive -InputObject $InputObject[$key]
+        }
+        return $converted
+    }
+
+    if ($InputObject -is [pscustomobject]) {
+        $hashtable = @{}
+        foreach ($prop in $InputObject.PSObject.Properties) {
+            $hashtable[$prop.Name] = ConvertTo-HashtableRecursive -InputObject $prop.Value
+        }
+        return $hashtable
+    }
+
+    if ($InputObject -is [System.Collections.IEnumerable] -and -not ($InputObject -is [string])) {
+        return @(
+            foreach ($item in $InputObject) {
+                ConvertTo-HashtableRecursive -InputObject $item
+            }
+        )
+    }
+
+    return $InputObject
 }
 
 function Update-AuditSummaryCounters {
@@ -684,9 +727,7 @@ function Invoke-ServerAudit {
                 -ComputerName $ComputerName `
                 -Port 5985 `
                 -Timeout 10 `
-                -Parallel $true `
-                -ThrottleLimit 3 `
-                -Verbose:($LogLevel -eq 'Verbose')
+                -ThrottleLimit 3
             
             # Log health check results
             Write-AuditLog "Health check completed: Passed=$($healthReport.Summary.Passed) Failed=$($healthReport.Summary.Failed) Warnings=$($healthReport.Summary.Warnings)" -Level Information
@@ -809,7 +850,15 @@ function Invoke-ServerAudit {
                 # Build timeout configuration for collectors
                 $timeoutConfig = @{}
                 if ($auditSession.Config -and $auditSession.Config.execution.timeout.collectorTimeouts) {
-                    $timeoutConfig = $auditSession.Config.execution.timeout.collectorTimeouts
+                    $collectorTimeouts = $auditSession.Config.execution.timeout.collectorTimeouts
+                    if ($collectorTimeouts -and $collectorTimeouts.PSObject -and $collectorTimeouts.PSObject.Properties.Count -gt 0) {
+                        foreach ($prop in $collectorTimeouts.PSObject.Properties) {
+                            $timeoutConfig[$prop.Name] = ConvertTo-HashtableRecursive -InputObject $prop.Value
+                        }
+                    }
+                }
+                if ($timeoutConfig.Count -eq 0) {
+                    $timeoutConfig = $null
                 }
 
                 $collectorResults = Invoke-CollectorExecution `
@@ -818,11 +867,10 @@ function Invoke-ServerAudit {
                     -Parallelism $serverResults.ParallelismUsed `
                     -TimeoutSeconds $serverResults.TimeoutUsed `
                     -TimeoutConfig $timeoutConfig `
-                    -PSVersion $auditSession.LocalPSVersion `
-                    -IsSlowServer $($serverResults.PerformanceProfile.ResourceConstraints.Count -gt 0) `
+                    -PSVersion ([version]$auditSession.LocalPSVersion).Major `
+                    -IsSlowServer:($serverResults.PerformanceProfile.ResourceConstraints.Count -gt 0) `
                     -DryRun:$DryRun `
-                    -CollectorPath $CollectorPath `
-                    -PSVersion $auditSession.LocalPSVersion
+                    -CollectorPath $CollectorPath
 
                 # Aggregate results
                 foreach ($result in $collectorResults) {
@@ -1333,7 +1381,8 @@ function Export-AuditResults {
     # Export JSON (raw data)
     $jsonPath = Join-Path -Path $OutputPath -ChildPath "audit_$timestamp.json"
     try {
-        $Results | ConvertTo-Json -Depth 10 | Out-File -LiteralPath $jsonPath -Encoding UTF8 -Force
+        $serializable = ConvertTo-HashtableRecursive -InputObject $Results
+        $serializable | ConvertTo-Json -Depth 10 | Out-File -LiteralPath $jsonPath -Encoding UTF8 -Force
         Write-AuditLog "Exported: $jsonPath" -Level Verbose
     } catch {
         Write-AuditLog "Failed to export JSON: $_" -Level Warning

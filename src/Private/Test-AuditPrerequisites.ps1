@@ -395,43 +395,21 @@ function Test-AuditPrerequisites {
         return $check
     }
 
-    # Determine parallel vs sequential execution
-    $useParallel = $Parallel -and ($PSVersionTable.PSVersion.Major -ge 7)
-    
-    if ($useParallel) {
-        Write-Verbose "Using PS7+ parallel execution with ThrottleLimit=$ThrottleLimit"
-        
-        $healthResults = $ComputerName | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel $scriptBlock `
-            -ArgumentList @(
-                $_,
-                $Credential,
-                $Port,
-                $Timeout,
-                ${function:Test-DnsResolution},
-                ${function:Test-NetworkConnectivity},
-                ${function:Test-WinRmConnectivity},
-                ${function:Get-HealthScore},
-                ${function:Get-RemediationSuggestions}
-            )
-    }
-    else {
-        Write-Verbose "Using sequential health checks (PS5 or -Parallel not specified)"
-        
-        $healthResults = @()
-        foreach ($computer in $ComputerName) {
-            $result = & $scriptBlock `
-                -Computer $computer `
-                -Cred $Credential `
-                -TestPort $Port `
-                -TestTimeout $Timeout `
-                -DnsTest ${function:Test-DnsResolution} `
-                -NetTest ${function:Test-NetworkConnectivity} `
-                -WinRmTest ${function:Test-WinRmConnectivity} `
-                -HealthCalc ${function:Get-HealthScore} `
-                -RemediationCalc ${function:Get-RemediationSuggestions}
-            
-            $healthResults += $result
-        }
+    Write-Verbose "Using sequential health checks (standalone mode)"
+    $healthResults = @()
+    foreach ($computer in $ComputerName) {
+        $result = & $scriptBlock `
+            -Computer $computer `
+            -Cred $Credential `
+            -TestPort $Port `
+            -TestTimeout $Timeout `
+            -DnsTest ${function:Test-DnsResolution} `
+            -NetTest ${function:Test-NetworkConnectivity} `
+            -WinRmTest ${function:Test-WinRmConnectivity} `
+            -HealthCalc ${function:Get-HealthScore} `
+            -RemediationCalc ${function:Get-RemediationSuggestions}
+
+        $healthResults += $result
     }
 
     # ─────────────────────────────────────────────────────────────────
@@ -484,5 +462,7 @@ function Test-AuditPrerequisites {
     return $report
 }
 
-# Export the function
-Export-ModuleMember -Function Test-AuditPrerequisites
+# Export the function only when running inside a module
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function Test-AuditPrerequisites
+}

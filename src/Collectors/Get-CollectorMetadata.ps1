@@ -436,14 +436,15 @@ function Get-CollectorSummary {
 }
 
 # Export functions
-Export-ModuleMember -Function @(
-    'Get-CollectorMetadata',
-    'Clear-CollectorMetadataCache',
-    'Get-CollectorMetadataCacheStats',
-    'Get-CompatibleCollectors',
-    'Get-CompatibleCollectorsByOS',
-    'Get-CollectorVariant',
-    'Test-CollectorDependencies',
-    'Get-WindowsVersionFromBuild',
-    'Get-CollectorSummary'
-)
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @(
+        'Get-CollectorMetadata',
+        'Clear-CollectorMetadataCache',
+        'Get-CollectorVariants',
+        'Get-CollectorMetadataCacheStats',
+        'Get-CollectorVariant',
+        'Test-CollectorDependencies',
+        'Get-WindowsVersionFromBuild',
+        'Get-CollectorSummary'
+    )
+}

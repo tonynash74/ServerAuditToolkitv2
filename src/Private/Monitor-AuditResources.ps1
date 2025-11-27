@@ -368,10 +368,12 @@ function Get-AuditResourceStatistics {
     }
 }
 
-# Export functions
-Export-ModuleMember -Function @(
-    'Start-AuditResourceMonitoring'
-    'Get-AuditResourceStatus'
-    'Stop-AuditResourceMonitoring'
-    'Get-AuditResourceStatistics'
-)
+# Export functions only when loaded as part of a module
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @(
+        'Start-AuditResourceMonitoring',
+        'Get-AuditResourceStatus',
+        'Stop-AuditResourceMonitoring',
+        'Get-AuditResourceStatistics'
+    )
+}

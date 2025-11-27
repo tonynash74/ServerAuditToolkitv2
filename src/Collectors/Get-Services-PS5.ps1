@@ -97,14 +97,13 @@ function Get-Services-PS5 {
 
         $result.Data.Services = @()
         $result.Data.Summary = @{
-            Total       = 0
-            Running     = 0
-            Stopped     = 0
-            Disabled    = 0
-            Auto        = 0
-            Manual      = 0
-            Disabled    = 0
+            Total   = 0
+            Running = 0
+            Stopped = 0
+            Auto    = 0
+            Manual  = 0
         }
+        $result.Data.Summary.Disabled = 0
 
         # === SECTION 2: Process Services ===
         foreach ($svc in $services) {

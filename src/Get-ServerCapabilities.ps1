@@ -648,13 +648,15 @@ function Calculate-ParallelismBudget {
     }
 }
 
-# Export functions
-Export-ModuleMember -Function @(
-    'Get-ServerCapabilities',
-    'Get-ProcessorInfo',
-    'Get-RAMInfo',
-    'Get-DiskPerformance',
-    'Test-NetworkConnectivity',
-    'Get-SystemLoad',
-    'Calculate-ParallelismBudget'
-)
+# Export functions only when running inside a module
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @(
+        'Get-ServerCapabilities',
+        'Get-ProcessorInfo',
+        'Get-RAMInfo',
+        'Get-DiskPerformance',
+        'Test-NetworkConnectivity',
+        'Get-SystemLoad',
+        'Calculate-ParallelismBudget'
+    )
+}

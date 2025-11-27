@@ -205,4 +205,6 @@ function Invoke-CollectorWithFallback {
     return $result
 }
 
-Export-ModuleMember -Function Invoke-CollectorWithFallback
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function Invoke-CollectorWithFallback
+}

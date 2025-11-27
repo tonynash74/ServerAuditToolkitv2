@@ -147,12 +147,6 @@ function New-ErrorMetricsDashboard {
                     $dashboard.ErrorsByCollector[$collectorName].ByType[$errorType] += 1
                 }
 
-                # By severity
-                $severity = $error.Severity
-                if ($dashboard.ErrorsBySeverity.ContainsKey($severity)) {
-                    $dashboard.ErrorsBySeverity[$severity] += 1
-                }
-
                 # Affected servers
                 if ($error.Server -notin $dashboard.AffectedServers) {
                     $dashboard.AffectedServers += $error.Server
@@ -743,7 +737,11 @@ function New-ErrorDashboardHTML {
     return $html
 }
 
-# Export public functions
-Export-ModuleMember -Function @(
-    'New-ErrorMetricsDashboard'
-)
+# Export public functions when loaded as module
+if ($ExecutionContext.SessionState.Module) {
+    Export-ModuleMember -Function @(
+        'New-ErrorMetricsDashboard',
+        'Update-ErrorMetrics',
+        'Get-ErrorMetricsReport'
+    )
+}
