@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![PowerShell](https://img.shields.io/badge/PowerShell-2.0%2B-brightgreen.svg)
-![Status](https://img.shields.io/badge/Status-Production%20v2.2.0--RC-brightgreen.svg)
+![Status](https://img.shields.io/badge/Status-Production%20v2.1.1-brightgreen.svg)
 ![Latest](https://img.shields.io/badge/Latest-Phase%203%20%2B%20T2%20%2B%20T3-blue.svg)
 
 ---
@@ -981,7 +981,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 ## Support & Roadmap
 
-### Current Status (v2.0 - PRODUCTION READY)
+### Current Status (v2.1.1 - PRODUCTION READY)
 
 **T1: Foundation** ✅ Complete
 - ✅ Version detection & metadata framework
@@ -1047,8 +1047,8 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 ---
 
-**Last Updated**: November 21, 2025  
-**Version**: 2.0.0 (T2 + T3 Complete)  
+**Last Updated**: November 27, 2025  
+**Version**: 2.1.1 (T2 + T3 Complete)  
 **Status**: Production Ready  
 **Total LOC**: 4,200+ (collectors + reporting + link analysis)  
 **Total Functions**: 45+  

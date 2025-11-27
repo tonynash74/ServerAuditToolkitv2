@@ -6,7 +6,7 @@
     Author            = 'ServerAuditToolkitV2 Team'
     CompanyName       = 'ServerAuditToolkit'
     Copyright         = '(c) ServerAuditToolkit. All rights reserved.'
-    ModuleVersion     = '1.0.0.0'
+    ModuleVersion     = '2.1.1'
     Description       = 'Windows Server audit toolkit to produce migration readiness datasets and a client-ready HTML report. PS2+ compatible.'
     PowerShellVersion = '2.0'
 
