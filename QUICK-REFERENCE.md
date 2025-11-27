@@ -8,7 +8,7 @@
 
 ## 📖 READ THESE FIRST (In Order)
 
-1. **PHASE-3-COMPLETION-SUMMARY.md** (5 min read)
+1. **docs/PHASE-3-COMPLETION-SUMMARY.md** (5 min read)
    - Visual status overview of 13/14 completed enhancements
    - What got done in Phase 3
    - Performance metrics
