@@ -69,6 +69,11 @@ jobs:
         }
         Write-Host "Invoke-ServerAudit is exported by the module."
 
+    - name: Run collector variant self-test
+      shell: pwsh
+      run: |
+        pwsh -NoProfile -File tests/Test-CollectorVariantSelection.ps1
+
     - name: Run PSScriptAnalyzer (errors/warnings fail)
       shell: pwsh
       run: |

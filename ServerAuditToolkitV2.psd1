@@ -12,8 +12,9 @@
     ScriptsToProcess      = @()
     TypesToProcess        = @()
     FormatsToProcess      = @()
-    FileList              = @()
-    ModuleList            = @()
+    NestedModules        = @('src\Collectors\CollectorSupport.psm1')
+    FileList             = @()
+    ModuleList           = @()
     FunctionsToExport = '*'
     CmdletsToExport   = @()
     VariablesToExport = @()
