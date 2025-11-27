@@ -1,484 +1,269 @@
+git clone https://github.com/tonynash74/ServerAuditToolkitv2.git
+git checkout -b feature/my-new-collector
+git checkout -b feature/add-nps-collector
+git checkout -b fix/timeout-logic
+git checkout -b docs/update-troubleshooting
+git commit -m "feat: add Get-NPSInfo collector for NPS server auditing"
+git push origin feature/add-nps-collector
 # Contributing to ServerAuditToolkitV2
 
-Thank you for considering contributing to **ServerAuditToolkitV2**! This document provides guidelines for developing, testing, and submitting new collectors, features, and fixes.
+Thanks for helping improve **ServerAuditToolkitV2**. This guide reflects the current repository layout (root `ServerAuditToolkitV2.psd1` + root `ServerAuditToolkitV2.psm1`, nested collector helper module, unified orchestrator roadmap) as of v2.1.1.
 
 ---
 
-## Table of Contents
+## Contents
 
 1. [Code of Conduct](#code-of-conduct)
-2. [Getting Started](#getting-started)
-3. [Development Workflow](#development-workflow)
-4. [PowerShell Code Standards](#powershell-code-standards)
-5. [Creating a New Collector](#creating-a-new-collector)
-6. [Testing](#testing)
-7. [Submitting a Pull Request](#submitting-a-pull-request)
-8. [License](#license)
+2. [Quick Start](#quick-start)
+3. [Repository Architecture](#repository-architecture)
+4. [Development Workflow](#development-workflow)
+5. [PowerShell Standards](#powershell-standards)
+6. [Collector Authoring Guide](#collector-authoring-guide)
+7. [Testing Matrix](#testing-matrix)
+8. [Pull Request Checklist](#pull-request-checklist)
+9. [License & Support](#license--support)
 
 ---
 
 ## Code of Conduct
 
-- Be respectful and professional in all interactions
-- Assume good intent from other contributors
-- Focus on the code, not the person
-- Help create a welcoming environment for all skill levels
+We follow the standard open-source etiquette:
+
+- Be respectful and assume positive intent.
+- Keep the discussion focused on code, testing, and user outcomes.
+- Offer constructive feedback and document rationale for design decisions.
+- Look out for newcomers—explain acronyms and reference docs when useful.
 
 ---
 
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- **Git** (for cloning and working with the repository)
-- **PowerShell 5.1+** (recommended for development)
-- **Pester** (testing framework): `Install-Module -Name Pester -Force`
-- **PSScriptAnalyzer** (linting): `Install-Module -Name PSScriptAnalyzer -Force`
+- **Git** for source control.
+- **PowerShell 7.2+** (primary dev shell). We maintain compatibility down to 2.0, but development/testing is easiest on pwsh 7.x and Windows PowerShell 5.1.
+- **Modules** (install once per machine):
+  ```powershell
+  Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -AllowClobber
+  Install-Module Pester -Scope CurrentUser -Force
+  ```
 
-### Setup
+### Clone & Prep
 
 ```powershell
-# Clone the repository
 git clone https://github.com/tonynash74/ServerAuditToolkitv2.git
 cd ServerAuditToolkitv2
 
-# Create a feature branch
-git checkout -b feature/my-new-collector
+# Optional: install locally for ModulePath imports
+pwsh -NoProfile -File .\Install-LocalModule.ps1 -Force
+
+# Start a branch
+git checkout -b feat/<short-description>
 ```
+
+---
+
+## Repository Architecture
+
+Key paths (relative to repo root):
+
+| Path | Purpose |
+|------|---------|
+| `ServerAuditToolkitV2.psd1` | Root manifest (exports module + nested collector helpers). |
+| `ServerAuditToolkitV2.psm1` | Module entry point (imports `src` folders, health checks). |
+| `src/Collectors/CollectorSupport.psm1` | Importable helper module (metadata loader, variant selection, dependency checks). Automatically loaded via manifest `NestedModules`. |
+| `Invoke-ServerAudit.ps1` | Unified orchestrator script (auto PS-version detection, variant selection, streaming/dry-run support). |
+| `tests/Test-CollectorVariantSelection.ps1` | Lightweight regression test covering variant logic (called in CI). |
+| `.github/workflows/powershell-ci.yml` | Windows runner pipeline (lint, module import, variant test). |
+
+When you add a collector or helper:
+
+- **Metadata & helpers** live under `src/Collectors`.
+- **Private/orchestrator helpers** stay under `src/Private` or the main module if cross-cutting.
+- **Docs** go to `docs/` or `README.md` depending on scope.
 
 ---
 
 ## Development Workflow
 
-### 1. Plan Your Contribution
+1. **Align Scope**
+   - Search existing issues/discussions to avoid duplicate work.
+   - Confirm feature fits the staged architecture (T1 = discovery, T2 = profiling, T3 = orchestration, T4 = reporting).
 
-Before writing code, check:
-- **Existing collectors**: Does one already do what you want?
-- **Open issues/discussions**: Is this already being discussed?
-- **Architecture**: Does your idea fit the T1-T4 design?
+2. **Branch Naming**
+   ```
+   feat/<topic>          # new collector or feature
+   fix/<issue>           # bug fix
+   docs/<section>        # documentation-only change
+   test/<target>         # test harness updates
+   ci/<pipeline>         # workflow changes
+   ```
 
-### 2. Create Your Feature Branch
+3. **Coding Loop**
+   - Keep commits focused and descriptive.
+   - Prefer small PRs (<= ~400 LOC) unless refactoring demands more.
 
-```powershell
-# Use descriptive branch names
-git checkout -b feature/add-nps-collector
-git checkout -b fix/timeout-logic
-git checkout -b docs/update-troubleshooting
-```
+4. **Local Quality Gate**
+   ```powershell
+   # Lint entire tree with repo settings
+   Invoke-ScriptAnalyzer -Path . -Recurse -Settings .\PSScriptAnalyzerSettings.psd1
 
-### 3. Make Changes
+   # Variant regression test (mirrors CI job)
+   pwsh -NoProfile -File .\tests\Test-CollectorVariantSelection.ps1
 
-Follow the [PowerShell Code Standards](#powershell-code-standards) below.
+   # Run targeted Pester suites (unit/integration as appropriate)
+   Invoke-Pester -Path .\tests -CI -Output Detailed
+   ```
 
-### 4. Test Locally
-
-```powershell
-# Run linter
-Invoke-ScriptAnalyzer -Path src/Collectors/Get-MyCollector.ps1 `
-    -Settings PSScriptAnalyzerSettings.psd1
-
-# Run tests
-Invoke-Pester tests/ -Verbose
-```
-
-### 5. Commit & Push
-
-```powershell
-# Commit with clear message
-git commit -m "feat: add Get-NPSInfo collector for NPS server auditing"
-
-# Push to your fork
-git push origin feature/add-nps-collector
-```
-
-### 6. Open a Pull Request
-
-See [Submitting a Pull Request](#submitting-a-pull-request) below.
+5. **Push & PR**
+   - Push regularly; open a Draft PR early for visibility if work spans multiple days.
+   - Ensure the GitHub Actions checks pass before requesting review.
 
 ---
 
-## PowerShell Code Standards
+## PowerShell Standards
 
-### File Structure & Header
+### Script Header Template
 
-**All PowerShell scripts must include this header** (customized with your info):
+Every `.ps1` collector or helper must expose readable help metadata:
 
 ```powershell
 <#
 .SYNOPSIS
-    Brief one-line description.
-
+    Short description.
 .DESCRIPTION
-    Longer description of functionality. Include:
-    - What the script/collector does
-    - What information it collects
-    - Performance considerations (if applicable)
-
+    Longer description with data collected, constraints, and notable dependencies.
 .PARAMETER ComputerName
-    Target server name or IP address. Accepts pipeline input.
-
+    Default target (often `$env:COMPUTERNAME`).
 .PARAMETER Credential
-    PSCredential object for remote authentication (if applicable).
-
+    Optional PSCredential parameter if remoting supported.
 .PARAMETER DryRun
-    If $true, validates prerequisites without collecting data.
-
+    Outline dry-run semantics.
 .EXAMPLE
-    # Simple example
-    .\Get-MyCollector.ps1
-
-.EXAMPLE
-    # Example with parameters
-    .\Get-MyCollector.ps1 -ComputerName "SERVER01" -DryRun
-
+    .\Get-Example.ps1 -ComputerName SERVER01
 .OUTPUTS
-    [PSObject]
-    Returns a custom object with properties:
-    - Success: [bool] Execution status
-    - Data: [object] Collected information
-    - Error: [string] Error message (if failed)
-    - ExecutionTime: [timespan] How long it took
-
+    [PSCustomObject] containing Success/Data/Error fields.
 .NOTES
-    Author:       [Your Name]
-    Organization: inTEC Group
-    Version:      1.0.0
-    Modified:     [Date in YYYY-MM-DD format]
-    PowerShell:   [Minimum version, e.g., 2.0, 5.1, 7.0]
-    License:      MIT
-
-    Description of any special considerations, dependencies, or gotchas.
-
+    Author, Version, LastModified (YYYY-MM-DD), MinPowerShell.
 .LINK
     https://github.com/tonynash74/ServerAuditToolkitv2
-
 #>
 ```
 
-### Collector Metadata Tags
+### Metadata Tags
 
-Embed these tags in comment block after help section:
+Immediately below the comment block, add tags used by `collector-metadata.json` ingestion:
 
 ```powershell
-# @CollectorName: Get-MyCollector
-# @PSVersions: 2.0,4.0,5.1,7.0
-# @MinWindowsVersion: 2008R2
+# @CollectorName: Get-Example
+# @PSVersions: 2.0,5.1,7.0
+# @MinWindowsVersion: 2012R2
 # @MaxWindowsVersion:
-# @Dependencies: Module1,Module2
-# @Timeout: 30
-# @Category: core|application|infrastructure|compliance
-# @Critical: true|false
+# @Dependencies: WebAdministration
+# @Timeout: 45
+# @Category: infrastructure
+# @Critical: true
 ```
 
-**Tags Explained:**
-| Tag | Example | Purpose |
-|-----|---------|---------|
-| `@CollectorName` | `Get-ServerInfo` | Unique identifier for this collector |
-| `@PSVersions` | `2.0,5.1,7.0` | PowerShell versions supported |
-| `@MinWindowsVersion` | `2008R2` | Earliest Windows Server version |
-| `@MaxWindowsVersion` | (blank) | Latest Windows version (blank = unlimited) |
-| `@Dependencies` | `WebAdministration` | Required modules/features |
-| `@Timeout` | `30` | Max execution seconds |
-| `@Category` | `application` | Classification for grouping |
-| `@Critical` | `true` | Is this essential for migration decisions? |
+### Style Highlights
 
-### Code Style
-
-- **Indentation**: 4 spaces (no tabs)
-- **Line length**: Max 120 characters (soft limit; hard limit 150)
-- **Variable naming**: PascalCase for objects, camelCase for internal vars
-  ```powershell
-  $ComputerName  # Parameter (PascalCase)
-  $localVariable # Internal (camelCase)
-  ```
-
-- **Functions**: Use `function` keyword, full names (no aliases)
-  ```powershell
-  # ✅ Good
-  function Get-ServerInfo {
-      $result = Get-WmiObject -Class Win32_OperatingSystem
-      return $result
-  }
-
-  # ❌ Bad
-  function Get-Info { gwmi Win32_OperatingSystem }
-  ```
-
-- **Error handling**: Always use try-catch
-  ```powershell
-  try {
-      $data = Get-CimInstance -ClassName Win32_OperatingSystem `
-          -ComputerName $ComputerName -ErrorAction Stop
-      return @{ Success = $true; Data = $data }
-  }
-  catch {
-      return @{ Success = $false; Error = $_.Exception.Message }
-  }
-  ```
-
-- **Logging**: Use structured format where possible
-  ```powershell
-  $logEntry = @{
-      Timestamp   = Get-Date -Format 'o'
-      Level       = 'Information'
-      Message     = "Collected data from $ComputerName"
-      CollectorName = 'Get-ServerInfo'
-  }
-  Write-Verbose ($logEntry | ConvertTo-Json -Compress)
-  ```
-
-- **Return format**: Standardized
-  ```powershell
-  return @{
-      Success       = $true
-      CollectorName = 'Get-ServerInfo'
-      Data          = $data
-      ExecutionTime = (Get-Date) - $startTime
-      RecordCount   = @($data).Count
-  }
-  ```
+- **Indentation**: 4 spaces, no tabs.
+- **Line length**: Soft limit 120 characters.
+- **Naming**: PascalCase parameters/functions, camelCase locals.
+- **Error handling**: Always wrap remote calls in `try { ... } catch { ... }` and return structured objects.
+- **Logging**: Use `Write-AuditLog` or `Write-Verbose` with meaningful context; avoid `Write-Host` in collectors.
+- **Return contract**: `@{ Success = [bool]; CollectorName = ''; Data = <obj>; Errors = @(); ExecutionTime = <ts> }`.
 
 ---
 
-## Creating a New Collector
+## Collector Authoring Guide
 
-### Step 1: Copy Template
+1. **Start from Template**
+   ```powershell
+   Copy-Item .\src\Collectors\Collector-Template.ps1 .\src\Collectors\Get-MyCollector.ps1
+   ```
 
-```powershell
-Copy-Item src/Collectors/Collector-Template.ps1 `
-    src/Collectors/Get-MyCollector.ps1
-```
+2. **Implement Logic**
+   - Capture `Start-Sleep`/IO operations carefully; keep execution predictable.
+   - Use CIM (`Get-CimInstance`) for PS 5.1+ variants when possible.
+   - Support `-ComputerName`, `-Credential`, and `-DryRun` for orchestration parity.
 
-### Step 2: Implement Core Logic
+3. **Create Version Variants (optional)**
+   - Name PS 5.1+ optimized scripts `Get-Name-PS5.ps1`.
+   - Update `variants` map inside `collector-metadata.json` so the orchestrator can pick the best file.
 
-```powershell
-function Get-MyCollector {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$false, ValueFromPipeline=$true)]
-        [string]$ComputerName = $env:COMPUTERNAME,
+4. **Update Metadata**
+   Add entry to `src/Collectors/collector-metadata.json` with descriptions, PS version support, timeouts, dependencies, etc.
 
-        [Parameter(Mandatory=$false)]
-        [System.Management.Automation.PSCredential]$Credential,
+5. **Run Local Tests** (see [Testing Matrix](#testing-matrix)).
 
-        [Parameter(Mandatory=$false)]
-        [switch]$DryRun
-    )
-
-    $startTime = Get-Date
-
-    try {
-        # Your collection logic here
-        $data = Get-SomeInfo -ComputerName $ComputerName
-
-        return @{
-            Success       = $true
-            CollectorName = 'Get-MyCollector'
-            Data          = $data
-            ExecutionTime = (Get-Date) - $startTime
-            RecordCount   = @($data).Count
-        }
-    }
-    catch {
-        return @{
-            Success       = $false
-            CollectorName = 'Get-MyCollector'
-            Error         = $_.Exception.Message
-            ExecutionTime = (Get-Date) - $startTime
-            RecordCount   = 0
-        }
-    }
-}
-```
-
-### Step 3: Create PS 5.1+ Variant (Optional)
-
-If PS 5.1+ offers performance improvements (e.g., CIM vs WMI):
-
-```powershell
-# Copy to Get-MyCollector-PS5.ps1
-# Replace Get-WmiObject with Get-CimInstance
-# Use modern error handling ($PSItem instead of $_)
-# Update @CollectorName tag to include -PS5
-```
-
-Example:
-```powershell
-# ❌ PS 2.0 version (slow)
-$data = Get-WmiObject -Class Win32_OperatingSystem -ComputerName $ComputerName
-
-# ✅ PS 5.1+ version (fast, CIM protocol)
-$data = Get-CimInstance -ClassName Win32_OperatingSystem -ComputerName $ComputerName
-```
-
-### Step 4: Register in Metadata
-
-Edit `src/Collectors/collector-metadata.json`:
-
-```json
-{
-  "name": "Get-MyCollector",
-  "displayName": "My Collector",
-  "description": "Description of what this collects",
-  "filename": "Get-MyCollector.ps1",
-  "category": "application",
-  "psVersions": ["2.0", "4.0", "5.1", "7.0"],
-  "minWindowsVersion": "2008R2",
-  "maxWindowsVersion": null,
-  "dependencies": ["ModuleName"],
-  "timeout": 30,
-  "estimatedExecutionTime": 15,
-  "criticalForMigration": true,
-  "variants": {
-    "2.0": "Get-MyCollector.ps1",
-    "5.1": "Get-MyCollector-PS5.ps1"
-  }
-}
-```
-
-### Step 5: Test
-
-```powershell
-# Test locally
-.\src\Collectors\Get-MyCollector.ps1
-
-# Test with orchestrator
-.\Invoke-ServerAudit.ps1 -Collectors @("Get-MyCollector") -DryRun
-```
+6. **Document**
+   If the collector exposes user-facing behavior, update `docs/API-REFERENCE.md` and `README.md` as appropriate.
 
 ---
 
-## Testing
+## Testing Matrix
 
-### Unit Tests
+| Layer | Command | Purpose |
+|-------|---------|---------|
+| Linting | `Invoke-ScriptAnalyzer -Path . -Recurse -Settings .\PSScriptAnalyzerSettings.psd1` | Enforces repo-wide rules (alias ban, formatting, security checks). |
+| Variant Regression | `pwsh -NoProfile -File tests/Test-CollectorVariantSelection.ps1` | Confirms `CollectorSupport.psm1` + metadata produce expected variant filenames (mirrors CI). |
+| Unit / Collector Tests | `Invoke-Pester -Path tests/unit -CI` | Validate individual collectors or helper functions; add new specs under `tests/unit`. |
+| Integration | `Invoke-Pester -Path tests/integration -CI` | Exercise `Invoke-ServerAudit.ps1` across sample scenarios (batch, streaming, dry-run). |
+| Manual Sanity | `.	ests	ools
+un-samples.ps1` (if available) or direct `Invoke-ServerAudit.ps1 -DryRun` | Useful before releasing or tagging. |
 
-Create `tests/unit/Get-MyCollector.Tests.ps1`:
+**CI Expectations**
 
-```powershell
-Describe 'Get-MyCollector' {
-    It 'Should return Success=true on valid input' {
-        $result = & .\src\Collectors\Get-MyCollector.ps1 -ComputerName $env:COMPUTERNAME
-        $result.Success | Should -Be $true
-    }
+GitHub Actions (`powershell-ci.yml`) runs on PRs:
 
-    It 'Should include required properties' {
-        $result = & .\src\Collectors\Get-MyCollector.ps1
-        $result.PSObject.Properties.Name | Should -Contain 'Success'
-        $result.PSObject.Properties.Name | Should -Contain 'Data'
-        $result.PSObject.Properties.Name | Should -Contain 'ExecutionTime'
-    }
+1. Import manifest + install to runner Modules path.
+2. Run PSScriptAnalyzer (errors/warnings fail the build).
+3. Execute `tests/Test-CollectorVariantSelection.ps1`.
+4. (Optional future) Hook for `Invoke-Pester` suites—feel free to add when contributing tests.
 
-    It 'Should timeout gracefully' {
-        # Mock slow operation
-        $result = & .\src\Collectors\Get-MyCollector.ps1 -ComputerName '192.0.2.1'
-        $result.ExecutionTime.TotalSeconds | Should -BeLessThan 60
-    }
-}
-```
-
-### Integration Tests
-
-Create `tests/integration/Invoke-ServerAudit.Integration.Tests.ps1`:
-
-```powershell
-Describe 'Invoke-ServerAudit Integration' {
-    It 'Should execute all collectors without error' {
-        $result = .\Invoke-ServerAudit.ps1 -ComputerName $env:COMPUTERNAME
-        $result.Servers[0].Success | Should -Be $true
-    }
-
-    It 'Should run max 3 concurrent servers' {
-        $servers = @('SERVER01', 'SERVER02', 'SERVER03', 'SERVER04')
-        # Verify concurrency is throttled to 3
-    }
-}
-```
-
-### Run Tests
-
-```powershell
-# Run all tests
-Invoke-Pester tests/ -Verbose
-
-# Run specific test
-Invoke-Pester tests/unit/Get-MyCollector.Tests.ps1
-
-# Run with coverage
-Invoke-Pester tests/ -CodeCoverage src/Collectors/*.ps1
-```
+Keep pipelines green by running the same commands locally before pushing.
 
 ---
 
-## Submitting a Pull Request
+## Pull Request Checklist
 
-### Before You Submit
+Before requesting review:
 
-- [ ] Code follows [PowerShell Code Standards](#powershell-code-standards)
-- [ ] All tests pass: `Invoke-Pester tests/`
-- [ ] Linter passes: `Invoke-ScriptAnalyzer -Path src/Collectors/...`
-- [ ] Help documentation is complete (`.SYNOPSIS`, `.DESCRIPTION`, `.EXAMPLES`)
-- [ ] Collector metadata is registered in `collector-metadata.json`
-- [ ] Changes are committed with clear, descriptive messages
+- [ ] Code follows [PowerShell Standards](#powershell-standards) and includes help/metadata blocks.
+- [ ] Variant mappings updated in `collector-metadata.json` when adding collectors.
+- [ ] Relevant docs updated (README, docs/API-REFERENCE.md, Quick Reference, etc.).
+- [ ] Added or updated tests; ran `Invoke-Pester` for affected suites.
+- [ ] Ran `Invoke-ScriptAnalyzer` and resolved findings.
+- [ ] Ran `pwsh -NoProfile -File tests/Test-CollectorVariantSelection.ps1` (required when touching collectors/metadata/orchestrator).
+- [ ] Commit messages follow `type(scope): summary` (e.g., `feat(collector): add Get-NPSInfo` or `ci(workflow): run variant test`).
 
-### PR Title Format
-
-```
-type(scope): description
-
-Examples:
-- feat(collector): add Get-NPSInfo collector for NPS server auditing
-- fix(orchestrator): resolve timeout handling for long-running collectors
-- docs(readme): update troubleshooting section with WinRM errors
-- test(parallel): add unit tests for max 3 concurrent job throttling
-```
-
-**Types**: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `ci`  
-**Scopes**: `collector`, `orchestrator`, `lib`, `test`, `docs`, etc.
-
-### PR Description Template
+**PR Description Template**
 
 ```markdown
-## Description
-Brief explanation of what this PR does.
-
-## Type of Change
-- [ ] New collector
-- [ ] Bug fix
-- [ ] Documentation update
-- [ ] Performance improvement
-- [ ] Refactoring
+## Summary
+- Short bullet list of changes.
 
 ## Testing
-- [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
-- [ ] Tested on PowerShell 5.1
-- [ ] Tested on PowerShell 7.x
-- [ ] Tested on Windows Server [version]
+- [ ] Invoke-ScriptAnalyzer
+- [ ] Variant self-test (tests/Test-CollectorVariantSelection.ps1)
+- [ ] Invoke-Pester (list suites)
+- [ ] Manual `Invoke-ServerAudit -DryRun`
 
-## Checklist
-- [ ] Code follows style guidelines
-- [ ] Self-review completed
-- [ ] Comments added for complex logic
-- [ ] Documentation updated
-- [ ] No new warnings generated
-- [ ] Tests pass locally
+## Risks / Rollback
+- Note any migration considerations or manual steps.
 
-## Related Issue
-Closes #[issue number]
+## Issue Reference
+Fixes #<ID>
 ```
 
 ---
 
-## License
+## License & Support
 
-By contributing to ServerAuditToolkitV2, you agree that your contributions will be licensed under the same MIT license as the project.
+- Contributions are released under the existing **MIT License** (see `LICENSE`).
+- Need guidance? Check `docs/DEVELOPMENT.md`, start a discussion on GitHub, or open an issue.
+- For architecture or release planning questions, reference `QUICK-REFERENCE.md` and the documents under `docs/`.
 
----
 
-## Questions?
-
-- 📖 See `docs/DEVELOPMENT.md` for detailed development guide
-- 💬 Start a discussion: https://github.com/tonynash74/ServerAuditToolkitv2/discussions
-- 🐛 Report issues: https://github.com/tonynash74/ServerAuditToolkitv2/issues
-
-Thank you for contributing! 🙏
+Thanks for keeping ServerAuditToolkitV2 healthy and production-ready! 🙏
