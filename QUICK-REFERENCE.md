@@ -1,6 +1,6 @@
 # QUICK REFERENCE GUIDE
 
-**Version**: v2.2.0-RC (Phase 3: 13/14 enhancements complete)  
+**Version**: v2.1.1 (Post Phase 3 alignment)  
 **Status**: ✅ PRODUCTION READY  
 **Branch**: main
 
@@ -55,6 +55,21 @@ f431c1c — fix(CRITICAL-001): Add credential passing to Invoke-Command in DNS a
 
 ---
 
+## 🛡 Latest Hardening (2025-11-27)
+
+| Commit | Focus |
+| --- | --- |
+| `6ed8e24` | Ensure orchestrator/runspaces share the same collector helper module, preserve full PS versions for variant detection, and add dry-run safety. |
+| `4403aad` | Load `CollectorSupport.psm1` via manifest `NestedModules` and extend CI (`powershell-ci.yml`) to run `tests/Test-CollectorVariantSelection.ps1`. |
+
+**Highlights**
+- Collector helper functions now ship as a module so every import/runspace loads consistent code without brittle dot-sourcing.
+- Variant selection uses full version strings (2.0/5.1/7.x), so optimized collectors are guaranteed when present.
+- CI enforces the variant self-test, catching future regressions automatically.
+- PS2 compatibility preserved: metadata loader uses a safe JSON parser (no `Invoke-Expression`).
+
+---
+
 ## 📊 STATISTICS
 
 ```
@@ -99,21 +114,12 @@ Listed in `docs/PR-001-CRITICAL-FIXES-PHASE1.md` under "Manual Testing"
 
 ## 🚀 WHAT HAPPENS NEXT
 
-### Approve → Merge → Release
+### Unified Orchestrator Focus
 ```
-1. Review this PR & run tests
-2. Approve and squash-merge to main
-3. Tag v2.0.1 (hotfix release)
-4. Announce critical fixes to users
-```
-
-### Then Schedule Phase 2
-```
-Week 1-2: HIGH Improvements (8-11 hours)
-- Use docs/HIGH-PRIORITY-FIXES-PLAN.md
-- 4 improvements with code samples ready
-- PR-002 and PR-003 to be created
-- Release v2.1
+1. Validate variant telemetry (streaming + summary) after latest hardening
+2. Begin unified orchestrator planning (docs/HIGH-PRIORITY-FIXES-PLAN.md)
+3. Design CI gate for Invoke-ServerAudit smoke tests (future)
+4. Prep release notes for potential v2.1.2 if additional fixes land
 ```
 
 ---
@@ -219,8 +225,8 @@ Read: `HIGH-PRIORITY-FIXES-PLAN.md` + code samples in `CODE-REVIEW-FIXES-GUIDE.m
 
 ---
 
-**Branch Status**: ✅ READY FOR MERGE  
-**Recommendation**: APPROVE → MERGE → TAG v2.0.1 → ANNOUNCE TO USERS
+**Branch Status**: ✅ MAIN STABLE (post-variant hardening)  
+**Recommendation**: Continue unified orchestrator planning + expand CI smoke coverage
 
 ---
 
