@@ -2,6 +2,26 @@
 
 # ---------- Module Root ----------
 $script:ModuleRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$script:ModuleInstallRoot = Split-Path -Parent $script:ModuleRoot
+
+# ---------- Health / Structure Check ----------
+try {
+  $manifestPath = Join-Path $script:ModuleInstallRoot 'ServerAuditToolkitV2.psd1'
+  $expectedDirs = @('Collectors','Private') | ForEach-Object { Join-Path $script:ModuleRoot $_ }
+  $issues = @()
+  if (-not (Test-Path -LiteralPath $manifestPath)) { $issues += "Missing manifest at $manifestPath" }
+  foreach ($d in $expectedDirs) { if (-not (Test-Path -LiteralPath $d)) { $issues += "Missing directory: $d" } }
+  if ($issues.Count -gt 0) {
+    $msg = "[ServerAuditToolkitV2] Structural issues detected:`n - " + ($issues -join "`n - ")
+    Write-Warning $msg
+    try {
+      $logFile = Join-Path $script:ModuleInstallRoot 'module_health.log'
+      Add-Content -Path $logFile -Value ("{0} {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg)
+    } catch {}
+  }
+} catch {
+  Write-Warning "[ServerAuditToolkitV2] Health check failed: $($_.Exception.Message)"
+}
 
 # ---------- Dot-source Private helpers FIRST (PS2-safe: no -File) ----------
 $privateDir = Join-Path $script:ModuleRoot 'Private'
