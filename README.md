@@ -223,7 +223,8 @@ ServerAuditToolkitv2/
 │   │   ├── Get-Services-PS5.ps1
 │   │   │
 │   │   ├── Collector-Template.ps1    [Template for new collectors]
-│   │   ├── Get-CollectorMetadata.ps1 [Metadata loader + helpers]
+│   │   ├── CollectorSupport.psm1    [Module wrapper for collector metadata helpers]
+│   │   └── Get-CollectorMetadata.ps1 [Helper definitions loaded by the module]
 │   │   └── collector-metadata.json   [Central registry of all collectors]
 │   │
 │   ├── Private/                      [Internal utility functions]
@@ -239,7 +240,7 @@ ServerAuditToolkitv2/
 ├── ServerAuditToolkitV2.psm1        [Module entry point (root)]
 │
 ├── lib/                              [Shared utility functions (future)]
-│   ├── Get-CollectorMetadata.ps1
+│   ├── CollectorSupport.psm1
 │   ├── Export-AuditReport.ps1
 │   └── ...
 │

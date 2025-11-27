@@ -236,9 +236,28 @@ if (-not $moduleImported) {
     }
 }
 
+# Load collector helper module once so orchestrator and runspaces share the same functions
+$collectorHelperCandidates = @(
+    Join-Path -Path $PSScriptRoot -ChildPath 'src\Collectors\CollectorSupport.psm1',
+    Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'src\Collectors\CollectorSupport.psm1'
+)
+
+$script:CollectorHelperModulePath = $collectorHelperCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+
+if ($script:CollectorHelperModulePath) {
+    try {
+        Import-Module -Name $script:CollectorHelperModulePath -Force -ErrorAction Stop | Out-Null
+        Write-Verbose "Collector helper module imported from $script:CollectorHelperModulePath"
+    } catch {
+        Write-Warning "Failed to import collector helper module '$script:CollectorHelperModulePath': $_"
+        $script:CollectorHelperModulePath = $null
+    }
+} else {
+    Write-Warning 'Collector helper module not found; variant selection may fail.'
+}
+
 $helperScripts = @(
     @{ RelativePath = 'src\Private\Monitor-AuditResources.ps1'; MissingMessage = 'Resource auto-throttling will be unavailable.' },
-    @{ RelativePath = 'src\Collectors\Get-CollectorMetadata.ps1'; MissingMessage = 'Collector discovery will fail.' },
     @{ RelativePath = 'src\Private\Test-AuditParameters.ps1'; MissingMessage = 'Parameter validation will be skipped.' },
     @{ RelativePath = 'src\Private\New-StreamingOutputWriter.ps1'; MissingMessage = 'Streaming output will be unavailable.' },
     @{ RelativePath = 'src\Private\Test-AuditPrerequisites.ps1'; MissingMessage = 'Health checks will be skipped.' },
@@ -1121,7 +1140,7 @@ function Invoke-CollectorExecution {
         [hashtable]$TimeoutConfig,
 
         [Parameter(Mandatory=$false)]
-        [int]$PSVersion = $PSVersionTable.PSVersion.Major,
+        [string]$PSVersion = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)",
 
         [Parameter(Mandatory=$false)]
         [switch]$IsSlowServer,
@@ -1134,10 +1153,17 @@ function Invoke-CollectorExecution {
     )
 
     $results = @()
+    try {
+        $psVersionParsed = [version]$PSVersion
+    } catch {
+        $psVersionParsed = [version]'2.0'
+    }
+    $psVersionDisplay = $psVersionParsed.ToString()
+    $psVersionMajor = $psVersionParsed.Major
 
     # PS2 or single-threaded mode
     if ($PSVersionTable.PSVersion.Major -le 2 -or $Parallelism -le 1) {
-        Write-AuditLog "Using sequential execution (PS $PSVersion or Parallelism=1)" -Level Verbose
+        Write-AuditLog "Using sequential execution (PS $psVersionDisplay or Parallelism=1)" -Level Verbose
 
         foreach ($collector in $Collectors) {
             # Calculate adaptive timeout for this collector
@@ -1145,7 +1171,7 @@ function Invoke-CollectorExecution {
             if ($TimeoutConfig) {
                 $collectorTimeout = Get-AdjustedTimeout `
                     -CollectorName $collector.name `
-                    -PSVersion $PSVersion `
+                    -PSVersion $psVersionMajor `
                     -TimeoutConfig $TimeoutConfig `
                     -IsSlowServer:$IsSlowServer
             }
@@ -1156,7 +1182,7 @@ function Invoke-CollectorExecution {
                 -TimeoutSeconds $collectorTimeout `
                 -DryRun:$DryRun `
                 -CollectorPath $CollectorPath `
-                -PSVersion $PSVersion
+                -PSVersion $psVersionDisplay
 
             $results += $collectorResult
         }
@@ -1170,10 +1196,11 @@ function Invoke-CollectorExecution {
             -MaxJobs $Parallelism `
             -TimeoutSeconds $TimeoutSeconds `
             -TimeoutConfig $TimeoutConfig `
-            -PSVersion $PSVersion `
+            -PSVersion $psVersionDisplay `
             -IsSlowServer:$IsSlowServer `
             -DryRun:$DryRun `
-            -CollectorPath $CollectorPath
+            -CollectorPath $CollectorPath `
+            -CollectorHelperModulePath $script:CollectorHelperModulePath
     }
 
     return $results
@@ -1301,19 +1328,43 @@ function Invoke-ParallelCollectors {
         [int]$TimeoutSeconds,
 
         [Parameter(Mandatory=$false)]
+        [hashtable]$TimeoutConfig,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$IsSlowServer,
+
+        [Parameter(Mandatory=$false)]
         [switch]$DryRun,
 
         [Parameter(Mandatory=$true)]
         [string]$CollectorPath,
 
         [Parameter(Mandatory=$true)]
-        [string]$PSVersion
+        [string]$PSVersion,
+
+        [Parameter(Mandatory=$false)]
+        [string]$CollectorHelperModulePath
     )
+
+    try {
+        $psVersionParsed = [version]$PSVersion
+    } catch {
+        $psVersionParsed = [version]'2.0'
+    }
+    $psVersionDisplay = $psVersionParsed.ToString()
+    $psVersionMajor = $psVersionParsed.Major
+
+    $initialSession = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+    foreach ($funcName in @('Invoke-SingleCollector', 'Write-AuditLog')) {
+        $func = Get-Command -Name $funcName -CommandType Function -ErrorAction Stop
+        $entry = New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry ($funcName, $func.Definition)
+        $initialSession.Commands.Add($entry)
+    }
 
     # Create runspace pool
     $RunspacePool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(
         1, $MaxJobs,
-        [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+        $initialSession
     )
     $RunspacePool.Open()
 
@@ -1323,31 +1374,44 @@ function Invoke-ParallelCollectors {
     try {
         # Queue collector jobs
         foreach ($collector in $Collectors) {
+            $collectorTimeout = $TimeoutSeconds
+            if ($TimeoutConfig) {
+                $collectorTimeout = Get-AdjustedTimeout `
+                    -CollectorName $collector.name `
+                    -PSVersion $psVersionMajor `
+                    -TimeoutConfig $TimeoutConfig `
+                    -IsSlowServer:$IsSlowServer
+            }
+
             $powerShell = [System.Management.Automation.PowerShell]::Create()
             $powerShell.RunspacePool = $RunspacePool
 
             # Add collector invocation script
             [void]$powerShell.AddScript({
-                param($Server, $Collector, $TimeoutSeconds, $CollectorPath, $PSVersion, $ScriptRoot)
+                param($Server, $Collector, $CollectorTimeout, $CollectorPath, $PSVersion, $CollectorModulePath, $DryRunFlag)
 
-                # Re-import functions in runspace
-                . (Join-Path -Path $ScriptRoot -ChildPath 'src\Collectors\Get-CollectorMetadata.ps1')
+                if (-not $CollectorModulePath -or -not (Test-Path -LiteralPath $CollectorModulePath)) {
+                    throw "Collector helper module not found at $CollectorModulePath"
+                }
+
+                Import-Module -Name $CollectorModulePath -Force -ErrorAction Stop | Out-Null
 
                 Invoke-SingleCollector `
                     -Server $Server `
                     -Collector $Collector `
-                    -TimeoutSeconds $TimeoutSeconds `
-                    -DryRun:$false `
+                    -TimeoutSeconds $CollectorTimeout `
+                    -DryRun:$DryRunFlag `
                     -CollectorPath $CollectorPath `
                     -PSVersion $PSVersion
             })
 
             $powerShell.AddArgument($Server)
             $powerShell.AddArgument($Collector)
-            $powerShell.AddArgument($TimeoutSeconds)
+            $powerShell.AddArgument($collectorTimeout)
             $powerShell.AddArgument($CollectorPath)
-            $powerShell.AddArgument($PSVersion)
-            $powerShell.AddArgument($PSScriptRoot)
+            $powerShell.AddArgument($psVersionDisplay)
+            $powerShell.AddArgument($CollectorHelperModulePath)
+            $powerShell.AddArgument($DryRun)
 
             $asyncHandle = $powerShell.BeginInvoke()
 

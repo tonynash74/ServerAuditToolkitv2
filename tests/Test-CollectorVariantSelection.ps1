@@ -1,4 +1,4 @@
-<#!
+<#
 .SYNOPSIS
     Basic variant selection tests for Get-CollectorVariant.
 .DESCRIPTION
@@ -6,7 +6,7 @@
     Verifies fallback and optimized selection for collectors with variants.
 .NOTES
     Run: pwsh -File .\tests\Test-CollectorVariantSelection.ps1
-!>
+#>
 
 function Assert-Equal {
     param(
@@ -61,9 +61,10 @@ $collectorSQL = [pscustomobject]@{
     dependencies = @()
 }
 
-# Load the variant function from collectors script if available; else define minimal inline version
+# Load collector helper module if functions not already available
 if (-not (Get-Command Get-CollectorVariant -ErrorAction SilentlyContinue)) {
-    . (Join-Path -Path $PSScriptRoot -ChildPath '..\src\Collectors\Get-CollectorMetadata.ps1')
+    $collectorModulePath = Join-Path -Path $PSScriptRoot -ChildPath '..\src\Collectors\CollectorSupport.psm1'
+    Import-Module -Name $collectorModulePath -Force -ErrorAction Stop
 }
 
 Write-Host "\n=== Variant Selection Tests ===" -ForegroundColor Cyan

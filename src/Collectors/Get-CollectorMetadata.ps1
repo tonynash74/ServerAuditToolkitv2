@@ -38,6 +38,53 @@ $script:MetadataCache = @{
     TTLSeconds = 300  # 5 minutes
 }
 
+$script:LegacyJsonParserLoaded = $false
+
+function ConvertTo-PSObjectRecursive {
+    param(
+        [Parameter(Mandatory=$false)]
+        $InputObject
+    )
+
+    if ($null -eq $InputObject) { return $null }
+
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        $hash = @{}
+        foreach ($key in $InputObject.Keys) {
+            $hash[$key] = ConvertTo-PSObjectRecursive -InputObject $InputObject[$key]
+        }
+        return [pscustomobject]$hash
+    }
+
+    if ($InputObject -is [System.Collections.IEnumerable] -and -not ($InputObject -is [string])) {
+        $list = @()
+        foreach ($item in $InputObject) {
+            $list += ,(ConvertTo-PSObjectRecursive -InputObject $item)
+        }
+        return $list
+    }
+
+    return $InputObject
+}
+
+function ConvertFrom-LegacyJson {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Json
+    )
+
+    if (-not $script:LegacyJsonParserLoaded) {
+        Add-Type -AssemblyName System.Web.Extensions -ErrorAction Stop
+        $script:LegacyJsonParserLoaded = $true
+    }
+
+    $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $serializer.MaxJsonLength = 67108864
+    $raw = $serializer.DeserializeObject($Json)
+    return ConvertTo-PSObjectRecursive -InputObject $raw
+}
+
 function Get-CollectorMetadata {
     [CmdletBinding()]
     param(
@@ -80,13 +127,12 @@ function Get-CollectorMetadata {
         Write-Verbose "Loading metadata from: $MetadataPath"
         $jsonContent = Get-Content -LiteralPath $MetadataPath -Raw -ErrorAction Stop
         
-        # PS2 doesn't have ConvertFrom-Json, so we use a fallback
+        # PS2 doesn't have ConvertFrom-Json, so we use a safe fallback
         if ($PSVersionTable.PSVersion.Major -ge 3) {
             $metadata = $jsonContent | ConvertFrom-Json
         } else {
-            # PS2 fallback: use basic JSON parsing (simplified)
-            Write-Warning "PowerShell 2.0 detected. Using simplified metadata parser."
-            $metadata = Invoke-Expression $jsonContent
+            Write-Warning "PowerShell 2.0 detected. Using legacy JSON parser via JavaScriptSerializer."
+            $metadata = ConvertFrom-LegacyJson -Json $jsonContent
         }
 
         # Cache the result
