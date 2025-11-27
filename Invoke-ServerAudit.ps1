@@ -871,7 +871,7 @@ function Invoke-ServerAudit {
         }
         
         foreach ($server in $ComputerName) {
-            Write-AuditLog "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -Level Information
+            Write-AuditLog "====================================" -Level Information
             Write-AuditLog "Server: $server" -Level Information
 
             $serverResults = @{
@@ -1082,7 +1082,7 @@ function Invoke-ServerAudit {
             Export-AuditResults -Results $auditSession.AuditResults -OutputPath $OutputPath
 
             # Display summary
-            Write-AuditLog "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -Level Information
+            Write-AuditLog "====================================" -Level Information
             Write-AuditLog "=== Audit Summary ===" -Level Information
             Write-AuditLog "Servers audited: $($auditSession.AuditResults.Summary.TotalServers)" -Level Information
             Write-AuditLog "Successful: $($auditSession.AuditResults.Summary.SuccessfulServers) | Failed: $($auditSession.AuditResults.Summary.FailedServers)" -Level Information
