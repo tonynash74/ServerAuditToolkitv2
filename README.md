@@ -427,6 +427,21 @@ Notes:
 - If your Documents folder is redirected to OneDrive or another location, the user module path will be under that redirected Documents path. The installer script detects redirected `Documents` and installs into the correct location.
 - Before making this module public (PowerShell Gallery), ensure any internal `devnotes` or sensitive files are excluded from publication.
 
+Uninstalling the locally installed module
+
+If you used `scripts/Install-LocalModule.ps1` to install the module for local testing, you can remove it with the included uninstall helper:
+
+```powershell
+# From the repository root on the target machine
+.\scripts\Uninstall-LocalModule.ps1 -Force
+
+# Or run interactively without -Force to confirm before deletion
+.\scripts\Uninstall-LocalModule.ps1
+```
+
+The uninstall script detects redirected `Documents` locations (OneDrive) and will remove the `ServerAuditToolkitV2` folder from the appropriate user modules path. It also attempts to `Remove-Module` from the current session.
+
+
 ### Basic Audit (Local Machine)
 
 ```powershell
