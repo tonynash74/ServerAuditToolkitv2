@@ -1,5 +1,5 @@
 @{
-    ModuleToProcess   = 'src\ServerAuditToolkitV2.psm1'
+    ModuleToProcess   = 'ServerAuditToolkitV2.psm1'
     GUID              = 'f0b6f1a2-2a1f-4a6f-9b7e-8b6c2a4d22b9'
     Author            = 'ServerAuditToolkitV2 Team'
     CompanyName       = 'ServerAuditToolkit'

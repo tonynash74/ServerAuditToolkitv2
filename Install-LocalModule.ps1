@@ -3,7 +3,7 @@
     Install the ServerAuditToolkitV2 module into the current user's PowerShell Modules folder
 
 .DESCRIPTION
-    Copies `ServerAuditToolkitV2.psd1` and the `src` folder into
+    Copies `ServerAuditToolkitV2.psd1`, `ServerAuditToolkitV2.psm1` and the `src` folder into
     `$env:USERPROFILE\Documents\PowerShell\Modules\ServerAuditToolkitV2` and then imports the module.
 
 .PARAMETER ModuleName
@@ -65,6 +65,12 @@ try {
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
 
     Copy-Item -Path $manifestCandidate -Destination $dest -Force
+    $psm1Candidate = Join-Path $SourcePath "$ModuleName.psm1"
+    if (Test-Path $psm1Candidate) {
+        Copy-Item -Path $psm1Candidate -Destination $dest -Force
+    } else {
+        Write-Warning "Module root psm1 not found at '$psm1Candidate'. Import may fail."
+    }
 
     $srcPath = Join-Path $SourcePath 'src'
     if (Test-Path $srcPath) {
