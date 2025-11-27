@@ -13,7 +13,7 @@
    - What got done in Phase 3
    - Performance metrics
 
-2. **SESSION-SUMMARY-2025-11-26.md** (10 min read)
+2. **docs/SESSION-SUMMARY-2025-11-26.md** (10 min read)
    - Latest session work (M-013, M-014)
    - Code deliverables (1,600+ lines)
    - Quality assurance results
@@ -90,10 +90,10 @@ Commits:               7 (all quality)
 - [x] Exception handling tested
 
 ### Integration Tests (Ready for Your Team ⏳)
-Listed in `PR-001-CRITICAL-FIXES-PHASE1.md` under "Integration Tests"
+Listed in `docs/PR-001-CRITICAL-FIXES-PHASE1.md` under "Integration Tests"
 
 ### Manual Testing (Ready for Your Team ⏳)
-Listed in `PR-001-CRITICAL-FIXES-PHASE1.md` under "Manual Testing"
+Listed in `docs/PR-001-CRITICAL-FIXES-PHASE1.md` under "Manual Testing"
 
 ---
 
@@ -110,7 +110,7 @@ Listed in `PR-001-CRITICAL-FIXES-PHASE1.md` under "Manual Testing"
 ### Then Schedule Phase 2
 ```
 Week 1-2: HIGH Improvements (8-11 hours)
-- Use HIGH-PRIORITY-FIXES-PLAN.md
+- Use docs/HIGH-PRIORITY-FIXES-PLAN.md
 - 4 improvements with code samples ready
 - PR-002 and PR-003 to be created
 - Release v2.1
@@ -122,21 +122,21 @@ Week 1-2: HIGH Improvements (8-11 hours)
 
 ```
 For Quick Overview:
-├─ PROJECT-COMPLETION-SUMMARY.md ← START HERE (5 min)
-└─ IMPLEMENTATION-SUMMARY.md (10 min)
+├─ docs/PROJECT-COMPLETION-SUMMARY.md ← START HERE (5 min)
+└─ docs/IMPLEMENTATION-SUMMARY.md (10 min)
 
 For Detailed Review:
-├─ PR-001-CRITICAL-FIXES-PHASE1.md (30 min)
-├─ CRITICAL-FIXES-IMPLEMENTATION.md (10 min)
-└─ CODE-REVIEW-REPORT.md (full details, 30 pages)
+├─ docs/PR-001-CRITICAL-FIXES-PHASE1.md (30 min)
+├─ docs/CRITICAL-FIXES-IMPLEMENTATION.md (10 min)
+└─ docs/CODE-REVIEW-REPORT.md (full details, 30 pages)
 
 For Implementation (Next Phase):
-├─ HIGH-PRIORITY-FIXES-PLAN.md (roadmap + code)
-└─ CODE-REVIEW-FIXES-GUIDE.md (code samples)
+├─ docs/HIGH-PRIORITY-FIXES-PLAN.md (roadmap + code)
+└─ docs/CODE-REVIEW-FIXES-GUIDE.md (code samples)
 
 For Testing:
-├─ PR-001-CRITICAL-FIXES-PHASE1.md (checklist in PR)
-├─ CODE-REVIEW-CHECKLIST.md (detailed procedures)
+├─ docs/PR-001-CRITICAL-FIXES-PHASE1.md (checklist in PR)
+├─ docs/CODE-REVIEW-CHECKLIST.md (detailed procedures)
 └─ Inline code comments (marked with ✅ and ❌)
 ```
 
@@ -144,9 +144,9 @@ For Testing:
 
 ## 🎯 APPROVAL CHECKLIST
 
-- [ ] Read PROJECT-COMPLETION-SUMMARY.md
-- [ ] Read IMPLEMENTATION-SUMMARY.md
-- [ ] Review PR-001-CRITICAL-FIXES-PHASE1.md
+- [ ] Read docs/PROJECT-COMPLETION-SUMMARY.md
+- [ ] Read docs/IMPLEMENTATION-SUMMARY.md
+- [ ] Review docs/PR-001-CRITICAL-FIXES-PHASE1.md
 - [ ] Review the 3 code commits
 - [ ] Run unit tests from checklist
 - [ ] Verify no regressions
@@ -164,7 +164,7 @@ A: Yes ✅. All CRITICAL issues fixed. 100% backwards compatible. Safe to deploy
 A: Recommended but not blocking. Run the integration tests in PR-001 for confidence.
 
 **Q: What about the other HIGH and MEDIUM issues?**  
-A: Already planned. See HIGH-PRIORITY-FIXES-PLAN.md and CODE-REVIEW-REPORT.md sections on MEDIUM issues.
+A: Already planned. See docs/HIGH-PRIORITY-FIXES-PLAN.md and docs/CODE-REVIEW-REPORT.md sections on MEDIUM issues.
 
 **Q: How long will HIGH fixes take?**  
 A: 8-11 hours total (spread over 2-3 weeks). Detailed in HIGH-PRIORITY-FIXES-PLAN.md.
