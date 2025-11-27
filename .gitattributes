@@ -4,7 +4,7 @@
 # Exclude internal developer notes from archive/export (e.g., GitHub zip/`git archive`)
 devnotes/ export-ignore
 devnotes/** export-ignore
-\n+# Internal development & planning docs (exclude from release archives)
+# Internal development & planning docs (exclude from release archives)
 docs/CODE-REVIEW-* export-ignore
 docs/CRITICAL-FIXES-IMPLEMENTATION.md export-ignore
 docs/DOCUMENTATION-CORRECTIONS-COMPLETE.md export-ignore
