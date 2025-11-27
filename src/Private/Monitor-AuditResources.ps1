@@ -13,7 +13,7 @@
     2. Auto-Throttling
        - Reduces parallel job count if CPU exceeds threshold (default 85%)
        - Reduces parallel job count if memory exceeds threshold (default 90%)
-       - Progressive reduction: max → (max/2) → (max/4) → 1 (minimum)
+    - Progressive reduction: max -> (max/2) -> (max/4) -> 1 (minimum)
        - Never fails completely, always attempts 1 job
     
     3. Health Recovery

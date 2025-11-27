@@ -39,7 +39,7 @@ if (Test-Path $collectDir) {
   foreach ($f in $script:CollectorFiles) { . $f.FullName }
 }
 
-# ---------- Safe helpers (fallbacks if Private\Compat wasn’t loaded) ----------
+# ---------- Safe helpers (fallbacks if Private\Compat wasn't loaded) ----------
 if (-not (Get-Command Write-Log -ErrorAction SilentlyContinue)) {
   function Write-Log {
     param([string]$Level,[string]$Message)

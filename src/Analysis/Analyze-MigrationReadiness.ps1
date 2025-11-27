@@ -2080,7 +2080,7 @@ function New-ExecutiveSummary {
                 rationale = "Provides optimal balance of cost efficiency ($($financialSummary.year1Savings) Year 1 savings), migration readiness, and manageable risk ($($RiskMitigation.riskSummary.riskLevel))"
             }
             businessImpact = @{
-                year1Cost = "`$$($BusinessCase.currentState.year1Cost) → `$$($BusinessCase.targetState.year1Cost)"
+                year1Cost = "`$$($BusinessCase.currentState.year1Cost) -> `$$($BusinessCase.targetState.year1Cost)"
                 year1Savings = "`$$($financialSummary.year1Savings)"
                 paybackPeriod = "$($financialSummary.paybackMonths) months"
                 nPV5Year = "`$$($financialSummary.npv5Year)"
@@ -2411,7 +2411,7 @@ function Build-DetailedMigrationPlan {
             
             riskTrackingPlan = @{
                 riskRegister = "Updated weekly"
-                escalationPath = "Owner → PM → Sponsor"
+                escalationPath = "Owner -> PM -> Sponsor"
                 contingencyActivation = "Per risk response plan"
                 reviewFrequency = "Weekly during execution"
             }

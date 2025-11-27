@@ -56,7 +56,7 @@ function Get-SATWSUS {
         }
 
         # Best-effort approvals backlog (API-less): look for WSUS MMC snap-in presence and SUSDB files
-        # We’ll just note content dir size as a rough indicator of data volume.
+        # We'll just note content dir size as a rough indicator of data volume.
         try {
           if ($res.ContentDir -and (Test-Path $res.ContentDir)) {
             $size = 0L

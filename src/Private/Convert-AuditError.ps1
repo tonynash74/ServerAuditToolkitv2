@@ -38,12 +38,12 @@
     }
     catch {
         $error = Convert-AuditError -ErrorRecord $_ -Context "Service enumeration"
-        Write-Host "Error: $($error.Category) — $($error.Message)"
+        Write-Host "Error: $($error.Category) - $($error.Message)"
         Write-Host "Fix: $($error.Remediation)"
     }
 
     # Output:
-    # Error: NetworkFailure — The RPC server is unavailable
+    # Error: NetworkFailure - The RPC server is unavailable
     # Fix: Check network connectivity to target server and ensure WinRM is running
 
 .EXAMPLE
@@ -89,9 +89,9 @@ function Convert-AuditError {
     $exceptionType = $ErrorRecord.Exception.GetType().Name
     $message = $ErrorRecord.Exception.Message
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Categorize based on exception type
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     if ($ErrorRecord.Exception -is [System.UnauthorizedAccessException]) {
         $category = 'PermissionDenied'
@@ -157,9 +157,9 @@ function Convert-AuditError {
         $remediation = 'Target is unreachable; verify network connectivity and firewall rules'
     }
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Build result object with full details
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     $result = [PSCustomObject]@{
         Category = $category
@@ -179,9 +179,9 @@ function Convert-AuditError {
     return $result
 }
 
-# ─────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # Convenience function for logging categorized errors
-# ─────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 
 function Write-AuditError {
     [CmdletBinding()]
@@ -195,9 +195,9 @@ function Write-AuditError {
 
     process {
         Write-Host ""
-        Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+        Write-Host "================================================" -ForegroundColor DarkGray
         Write-Host "ERROR: $($AuditError.Context)" -ForegroundColor Red
-        Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+        Write-Host "================================================" -ForegroundColor DarkGray
         Write-Host ""
         
         Write-Host "Category:   " -NoNewline
@@ -208,7 +208,7 @@ function Write-AuditError {
         
         Write-Host ""
         Write-Host "Remediation:" -ForegroundColor Green
-        Write-Host "  → $($AuditError.Remediation)" -ForegroundColor Green
+        Write-Host "  -> $($AuditError.Remediation)" -ForegroundColor Green
         Write-Host ""
 
         if ($IncludeFull) {

@@ -71,7 +71,7 @@
       }
     } catch [System.UnauthorizedAccessException] {
       $error = Convert-AuditError -ErrorRecord $_ -Context "DNS collector on $c"
-      Write-Log Error ("DNS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Error ("DNS collector - {0}: {1}" -f $error.Category, $error.Message)
       Write-Log Info ("Remediation: {0}" -f $error.Remediation)
       $out[$c] = @{ 
         Error = $error.Message
@@ -80,7 +80,7 @@
       }
     } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
       $error = Convert-AuditError -ErrorRecord $_ -Context "DNS collector on $c"
-      Write-Log Error ("DNS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Error ("DNS collector - {0}: {1}" -f $error.Category, $error.Message)
       Write-Log Info ("Remediation: {0}" -f $error.Remediation)
       $out[$c] = @{ 
         Error = $error.Message
@@ -89,7 +89,7 @@
       }
     } catch {
       $error = Convert-AuditError -ErrorRecord $_ -Context "DNS collector on $c"
-      Write-Log Error ("DNS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Error ("DNS collector - {0}: {1}" -f $error.Category, $error.Message)
       Write-Log Info ("Remediation: {0}" -f $error.Remediation)
       $out[$c] = @{ 
         Error = $error.Message

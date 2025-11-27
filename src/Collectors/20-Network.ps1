@@ -65,7 +65,7 @@
         $out[$c] = $res
 
       } else {
-        # PS2+/no NetTCPIP â†’ WMI + classic tools
+        # PS2+/no NetTCPIP -> WMI + classic tools
         $scr = {
           param($incListen)
           $cfg = Get-WmiObject -Class Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue |

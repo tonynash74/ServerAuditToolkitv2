@@ -10,7 +10,7 @@ Transforms decision data into visually-formatted HTML dashboard including:
 - Top 3 destination recommendations (side-by-side comparison)
 - Cost breakdown and TCO comparison
 - Migration blockers (red flags)
-- Remediation checklist (critical → nice-to-have)
+- Remediation checklist (critical -> nice-to-have)
 - Project timeline (Gantt chart)
 - Network dependency diagram
 - Compliance requirements

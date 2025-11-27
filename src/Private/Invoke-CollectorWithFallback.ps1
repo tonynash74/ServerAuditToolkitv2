@@ -4,9 +4,9 @@
 
 .DESCRIPTION
     Implements 3-tier fallback strategy for robust data collection:
-    1. CIM (Get-CimInstance) — preferred, modern, faster
-    2. WMI (Get-WmiObject) — fallback for CIM failures
-    3. Partial data — best-effort collection if both fail
+    1. CIM (Get-CimInstance) - preferred, modern, faster
+    2. WMI (Get-WmiObject) - fallback for CIM failures
+    3. Partial data - best-effort collection if both fail
     
     Logs all fallback events with reasons. Never fails completely if any data available.
 

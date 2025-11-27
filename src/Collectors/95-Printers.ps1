@@ -10,7 +10,7 @@ function Get-SATPrinters {
       $scr = {
         $res = @{ Printers=@(); Ports=@(); Notes=''; Error=$null }
 
-        # If Spooler is stopped/disabled, don’t hard fail
+        # If Spooler is stopped/disabled, don't hard fail
         $spState = $null
         try { $sp = Get-WmiObject -Class Win32_Service -Filter "Name='Spooler'" -ErrorAction SilentlyContinue; if ($sp){ $spState = $sp.State } } catch {}
         if ($spState -and $spState -ne 'Running') {

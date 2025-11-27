@@ -127,7 +127,7 @@ function Get-AdjustedTimeout {
             $originalTimeout = $timeout
             $timeout = [math]::Round($timeout * $multiplier)
             
-            Write-Verbose ("Adjusted timeout for slow server '{0}': {1}s → {2}s (multiplier: {3})" -f `
+            Write-Verbose ("Adjusted timeout for slow server '{0}': {1}s -> {2}s (multiplier: {3})" -f `
                 $CollectorName, $originalTimeout, $timeout, $multiplier)
         }
     }

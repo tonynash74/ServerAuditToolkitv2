@@ -98,9 +98,9 @@ function Test-AuditParameters {
         [hashtable]$CollectorMetadata
     )
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Validate ComputerName
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     
     if ($null -eq $ComputerName -or $ComputerName.Count -eq 0) {
         throw "ComputerName cannot be null or empty"
@@ -114,7 +114,7 @@ function Test-AuditParameters {
             throw "ComputerName array contains null or whitespace value"
         }
 
-        # Validate format (lenient — warn on suspicious, but don't fail)
+        # Validate format (lenient - warn on suspicious, but don't fail)
         $isLocalhost = $computer -in $localhostIndicators -or $computer -eq '.' -or $computer -eq 'localhost'
         $isValidFqdn = $computer -match $fqdnPattern
         $isIpAddress = $computer -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$' -or $computer -match '^[a-fA-F0-9:]+$'
@@ -132,9 +132,9 @@ function Test-AuditParameters {
         }
     }
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Validate Capability hashtable if provided
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     
     if ($null -ne $Capability) {
         if ($Capability -isnot [hashtable]) {
@@ -157,9 +157,9 @@ function Test-AuditParameters {
         }
     }
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Validate Credential if provided
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     
     if ($null -ne $Credential) {
         if ($Credential -isnot [System.Management.Automation.PSCredential]) {
@@ -180,9 +180,9 @@ function Test-AuditParameters {
         }
     }
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Validate CollectorMetadata if provided
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     
     if ($null -ne $CollectorMetadata) {
         if ($CollectorMetadata -isnot [hashtable]) {
@@ -205,9 +205,9 @@ function Test-AuditParameters {
         }
     }
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # All validations passed
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     
     return $true
 }

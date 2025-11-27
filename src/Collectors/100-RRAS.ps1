@@ -93,7 +93,7 @@ function Get-SATRRAS {
       } -Description "RRAS inventory on $c" -MaxRetries 3
     } catch [System.UnauthorizedAccessException] {
       $error = Convert-AuditError -ErrorRecord $_ -Context "RRAS collector on $c"
-      Write-Log Error ("RRAS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Error ("RRAS collector - {0}: {1}" -f $error.Category, $error.Message)
       Write-Log Info ("Remediation: {0}" -f $error.Remediation)
       $out[$c] = @{ 
         ServiceState = $null
@@ -107,7 +107,7 @@ function Get-SATRRAS {
       }
     } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
       $error = Convert-AuditError -ErrorRecord $_ -Context "RRAS collector on $c"
-      Write-Log Error ("RRAS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Error ("RRAS collector - {0}: {1}" -f $error.Category, $error.Message)
       Write-Log Info ("Remediation: {0}" -f $error.Remediation)
       $out[$c] = @{ 
         ServiceState = $null
@@ -121,7 +121,7 @@ function Get-SATRRAS {
       }
     } catch {
       $error = Convert-AuditError -ErrorRecord $_ -Context "RRAS collector on $c"
-      Write-Log Error ("RRAS collector — {0}: {1}" -f $error.Category, $error.Message)
+      Write-Log Error ("RRAS collector - {0}: {1}" -f $error.Category, $error.Message)
       Write-Log Info ("Remediation: {0}" -f $error.Remediation)
       $out[$c] = @{ ServiceState=$null; Mode=$null; Ports=$null; ActiveVPN=$null; Notes='collector exception'; Error=$error.Message; ErrorType=$error.Category; ErrorDetails=$error.Remediation }
     }

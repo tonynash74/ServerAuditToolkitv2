@@ -51,11 +51,11 @@
     - Gracefully stops long-running audits (e.g., data discovery)
 
     Example Timeline (startHour=8, cutoffMinutes=60):
-    - 6:00 AM   → Safe to run (2hr before cutoff)
-    - 6:50 AM   → Safe to run (1hr 10min before cutoff)
-    - 7:00 AM   → CUTOFF — Stop execution (within 1hr of 8 AM)
-    - 8:00 AM   → CUTOFF — Business hours start (STOP)
-    - 5:00 PM   → Safe to run again (past business hours)
+    - 6:00 AM   -> Safe to run (2hr before cutoff)
+    - 6:50 AM   -> Safe to run (1hr 10min before cutoff)
+    - 7:00 AM   -> CUTOFF - Stop execution (within 1hr of 8 AM)
+    - 8:00 AM   -> CUTOFF - Business hours start (STOP)
+    - 5:00 PM   -> Safe to run again (past business hours)
 
 .LINK
     https://github.com/tonynash74/ServerAuditToolkitv2
@@ -100,7 +100,7 @@ function Test-BusinessHoursCutoff {
     }
     catch {
         Write-Error "Failed to check business hours cutoff: $_"
-        # Fail closed — assume we should stop to be safe
+        # Fail closed - assume we should stop to be safe
         return $true
     }
 }
