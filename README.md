@@ -402,6 +402,31 @@ Invoke-ScriptAnalyzer -Path .\src -Recurse
 
 ## Usage
 
+### Module install & import
+
+This repository contains a PowerShell module layout with `ServerAuditToolkitV2.psd1` and `src\ServerAuditToolkitV2.psm1` under the `src` folder. If `Import-Module ServerAuditToolkitV2` fails with "module not found", follow one of these options:
+
+- Install locally using the included installer script (recommended for local testing):
+
+```powershell
+# From the repository root on the target machine
+.\scripts\Install-LocalModule.ps1 -Force
+
+# Then import by name
+Import-Module ServerAuditToolkitV2
+```
+
+- Or import directly from the module manifest if you prefer not to copy the module into a `PSModulePath` location:
+
+```powershell
+Import-Module 'C:\full\path\to\ServerAuditToolkitV2.psd1'
+```
+
+Notes:
+
+- If your Documents folder is redirected to OneDrive or another location, the user module path will be under that redirected Documents path. The installer script detects redirected `Documents` and installs into the correct location.
+- Before making this module public (PowerShell Gallery), ensure any internal `devnotes` or sensitive files are excluded from publication.
+
 ### Basic Audit (Local Machine)
 
 ```powershell

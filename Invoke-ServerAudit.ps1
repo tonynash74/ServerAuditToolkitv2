@@ -165,16 +165,75 @@ param(
     [string]$StreamOutputPath
 )
 
-$moduleManifestPath = Join-Path -Path $PSScriptRoot -ChildPath 'ServerAuditToolkitV2.psd1'
-$legacyCorePath = Join-Path -Path $PSScriptRoot -ChildPath 'src\core'
-if ((Test-Path -LiteralPath $moduleManifestPath) -and (Test-Path -LiteralPath $legacyCorePath)) {
-    try {
-        Import-Module -Name $moduleManifestPath -Force -ErrorAction Stop | Out-Null
-    } catch {
-        Write-Warning "Failed to import ServerAuditToolkitV2 module: $_"
+$moduleImported = $false
+
+# First, prefer an installed module import by name (normal user scenario)
+try {
+    Import-Module -Name 'ServerAuditToolkitV2' -ErrorAction Stop | Out-Null
+    $moduleImported = $true
+} catch {
+    # Not installed or failed import by name; we'll attempt local manifests next
+    $moduleImported = $false
+}
+
+if (-not $moduleImported) {
+    # Look for a local manifest in a few likely locations (script root, script root/src, parent)
+    $candidates = @(
+        Join-Path -Path $PSScriptRoot -ChildPath 'ServerAuditToolkitV2.psd1',
+        Join-Path -Path $PSScriptRoot -ChildPath 'src\ServerAuditToolkitV2.psd1',
+        Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'ServerAuditToolkitV2.psd1'
+    )
+
+    $foundManifest = $null
+    foreach ($cand in $candidates) {
+        if ($cand -and (Test-Path -LiteralPath $cand)) { $foundManifest = $cand; break }
     }
-} else {
-    Write-Verbose "Skipping module import (manifest: $moduleManifestPath, core path: $legacyCorePath)"
+
+    if ($foundManifest) {
+        try {
+            Import-Module -Name $foundManifest -Force -ErrorAction Stop | Out-Null
+            Write-Verbose "Imported module from manifest: $foundManifest"
+            $moduleImported = $true
+        } catch {
+            Write-Warning "Failed to import ServerAuditToolkitV2 from local manifest '$foundManifest': $_"
+            $moduleImported = $false
+        }
+    }
+}
+
+if (-not $moduleImported) {
+    # Graceful guidance for users who manually deploy/copy the repo
+    $readmePathCandidates = @(
+        Join-Path -Path $PSScriptRoot -ChildPath 'README.md',
+        Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'README.md'
+    )
+    $readmePath = $readmePathCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    $installScriptCandidates = @(
+        Join-Path -Path $PSScriptRoot -ChildPath 'scripts\Install-LocalModule.ps1',
+        Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'scripts\Install-LocalModule.ps1'
+    )
+    $installScript = $installScriptCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    Write-Host "`nERROR: Required module 'ServerAuditToolkitV2' is not installed or could not be loaded.`n" -ForegroundColor Red
+    Write-Host "To install/import the module locally, you have two options:" -ForegroundColor Yellow
+    if ($installScript) {
+        Write-Host "  1) From the repository root, run:" -ForegroundColor Cyan
+        Write-Host "       PowerShell -NoProfile -ExecutionPolicy Bypass -File `"$installScript`" -Force" -ForegroundColor Cyan
+    } else {
+        Write-Host "  1) Copy the module folder into a folder listed in `$env:PSModulePath` or run:" -ForegroundColor Cyan
+        Write-Host "       Import-Module '<full-path-to>\\ServerAuditToolkitV2.psd1'" -ForegroundColor Cyan
+    }
+    if ($readmePath) {
+        Write-Host "`nSee the README for full guidance: $readmePath`n" -ForegroundColor Cyan
+    } else {
+        Write-Host "`nSee repository documentation for installation instructions.`n" -ForegroundColor Cyan
+    }
+
+    # Exit gracefully when running as a script; if running as a module import, allow import to continue.
+    if (-not $ExecutionContext.SessionState.Module) {
+        return
+    }
 }
 
 $helperScripts = @(
