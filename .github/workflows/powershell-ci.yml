@@ -10,6 +10,8 @@ jobs:
   psci:
     name: PowerShell CI
     runs-on: windows-latest
+    env:
+      PS_USER_MODULES: ${{ env.USERPROFILE }}\\Documents\\PowerShell\\Modules
 
     steps:
     - name: Checkout repository
@@ -19,6 +21,14 @@ jobs:
       uses: actions/setup-powershell@v2
       with:
         pwsh-version: '7.3'
+
+    - name: Cache PowerShell Modules
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.PS_USER_MODULES }}
+        key: ${{ runner.os }}-psmodules-${{ hashFiles('**/ServerAuditToolkitV2.psd1') }}
+        restore-keys: |
+          ${{ runner.os }}-psmodules-
 
     - name: Install PSScriptAnalyzer
       shell: pwsh
@@ -35,6 +45,20 @@ jobs:
         }
         Import-Module $manifestPath -Force -ErrorAction Stop
         Write-Host "Imported module manifest: $manifestPath"
+
+    - name: Install module to runner modules path (simulate installed)
+      shell: pwsh
+      run: |
+        $dest = Join-Path $env:USERPROFILE 'Documents\PowerShell\Modules\ServerAuditToolkitV2'
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        Copy-Item -Path (Join-Path $PWD 'ServerAuditToolkitV2.psd1') -Destination $dest -Force
+        if (Test-Path (Join-Path $PWD 'src')) {
+          Copy-Item -Path (Join-Path $PWD 'src\*') -Destination $dest -Recurse -Force
+        } else {
+          Write-Host "No src directory found to copy; module manifest should reference module files."
+        }
+        Import-Module $dest -Force -ErrorAction Stop
+        Write-Host "Imported module from installed modules path: $dest"
 
     - name: Verify exported commands
       shell: pwsh
