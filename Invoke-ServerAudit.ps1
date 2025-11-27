@@ -845,21 +845,21 @@ function Invoke-ServerAudit {
             Write-AuditLog "Health check completed: Passed=$($healthReport.Summary.Passed) Failed=$($healthReport.Summary.Failed) Warnings=$($healthReport.Summary.Warnings)" -Level Information
             
             if (-not $healthReport.IsHealthy) {
-                Write-AuditLog "⚠ Health check warnings detected:" -Level Warning
+                Write-AuditLog "Warning: health check issues detected" -Level Warning
                 foreach ($issue in $healthReport.Issues) {
                     Write-AuditLog "  - $issue" -Level Warning
                 }
                 
                 if ($healthReport.Summary.Failed -gt 0) {
-                    Write-AuditLog "❌ Critical health check failures detected. Audit cannot proceed without addressing these issues:" -Level Error
+                    Write-AuditLog "Critical health check failures detected. Audit cannot proceed without addressing these issues:" -Level Error
                     foreach ($remediation in $healthReport.Remediation | Select-Object -Unique) {
-                        Write-AuditLog "  💡 $remediation" -Level Error
+                        Write-AuditLog "  Hint: $remediation" -Level Error
                     }
                     throw "Pre-flight health check failed for $($healthReport.Summary.Failed) server(s)"
                 }
             }
             else {
-                Write-AuditLog "✓ All servers passed health checks. Proceeding with audit." -Level Information
+                Write-AuditLog "All servers passed health checks. Proceeding with audit." -Level Information
             }
             
             # Store health report in audit session for later reporting
@@ -914,7 +914,7 @@ function Invoke-ServerAudit {
                             if ($profile.ResourceConstraints.Count -gt 0) {
                                 Write-AuditLog "Resource constraints detected:" -Level Warning
                                 $profile.ResourceConstraints | ForEach-Object {
-                                    Write-AuditLog "  ⚠ $_" -Level Warning
+                                    Write-AuditLog "  Warning: $_" -Level Warning
                                     $serverResults.Warnings += $_
                                 }
                             }
