@@ -960,7 +960,7 @@ function Invoke-ServerAudit {
                     -Parallelism $serverResults.ParallelismUsed `
                     -TimeoutSeconds $serverResults.TimeoutUsed `
                     -TimeoutConfig $timeoutConfig `
-                    -PSVersion ([version]$auditSession.LocalPSVersion).Major `
+                    -PSVersion $auditSession.LocalPSVersion `
                     -IsSlowServer:($serverResults.PerformanceProfile.ResourceConstraints.Count -gt 0) `
                     -DryRun:$DryRun `
                     -CollectorPath $CollectorPath
@@ -1215,18 +1215,22 @@ function Invoke-SingleCollector {
     }
 
     try {
-        # Get optimal variant
-        $variant = Get-CollectorVariant -Collector $Collector -PSVersion $PSVersion
-        $collectorScriptPath = Join-Path -Path $CollectorPath -ChildPath $variant
-
         Write-AuditLog "  Running: $($Collector.displayName)..." -NoNewline -Level Information
-
+        # Variant selection and logging
+        $requestedVersion = $PSVersion
+        $variant = Get-CollectorVariant -Collector $Collector -PSVersion $requestedVersion
+        $baselineVariant = $Collector.filename
+        $collectorScriptPath = Join-Path -Path $CollectorPath -ChildPath $variant
+        if ($variant -ne $baselineVariant) {
+            Write-AuditLog " (variant: $variant)" -Level Verbose
+        } else {
+            Write-AuditLog " (baseline: $variant)" -Level Verbose
+        }
         if ($DryRun) {
-            Write-AuditLog " [DRY-RUN]" -Level Information
+            Write-AuditLog " [DRY-RUN -> $variant]" -Level Information
             $result.Status = 'DRY-RUN'
             return $result
         }
-
         # Validate collector exists
         if (-not (Test-Path -LiteralPath $collectorScriptPath)) {
             throw "Collector not found: $collectorScriptPath"

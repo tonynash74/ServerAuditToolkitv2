@@ -147,14 +147,17 @@ $results = .\Invoke-ServerAudit.ps1 `
 # Results will only include those 2 collectors
 ```
 
-### Use PS 5.1+ Optimized Variant
+### Version & Variant Optimization
 
 ```powershell
-# If running on PS 5.1 or 7.x, toolkit auto-selects optimized collectors
-# No special flag needed — orchestrator detects your PS version
+# The unified orchestrator auto-detects local PowerShell version (2.0 / 5.1 / 7.x)
+# and chooses the best available collector variant:
+#   1. Exact match (e.g. 5.1 optimized)
+#   2. Highest lower compatible (fallback hierarchy: 7.0→5.1→4.0→2.0)
+#   3. Baseline filename if no mapped variants
+# Dry-run lists chosen variant per collector without executing.
 
-# Manual override (not recommended):
-$results = .\Invoke-ServerAudit-PS5.ps1 -ComputerName "SERVER01"
+.\Invoke-ServerAudit.ps1 -ComputerName "SERVER01" -DryRun -Verbose
 ```
 
 ---
@@ -169,7 +172,7 @@ $results = .\Invoke-ServerAudit-PS5.ps1 -ComputerName "SERVER01"
 │  Running PowerShell 2.0 / 5.1 / 7.x                        │
 └────────────────────┬────────────────────────────────────────┘
                      │
-                     ├──→ .\Invoke-ServerAudit.ps1 (or -PS5 / -PS7)
+                     ├──→ .\Invoke-ServerAudit.ps1 (auto version + variant detection)
                      │
                      ├─→ [T1] Detect PS version + load collectors
                      │
@@ -183,22 +186,20 @@ $results = .\Invoke-ServerAudit-PS5.ps1 -ComputerName "SERVER01"
                             ├─ WinRM → SERVER02
                             └─ WinRM → SERVER03
                                 │
-                                ├─ Get-ServerInfo-PS5.ps1
-                                ├─ Get-IISInfo-PS5.ps1
-                                ├─ Get-SQLServerInfo-PS5.ps1
-                                ├─ Get-Services-PS5.ps1
-                                └─ ... (12+ collectors)
+                                ├─ Get-ServerInfo*.ps1 (variant selection)
+                                ├─ Get-IISInfo*.ps1
+                                ├─ Get-SQLServerInfo*.ps1
+                                ├─ Get-Services*.ps1
+                                └─ ... (remaining collectors)
                                 │
                                 └─→ JSON results → CSV / HTML reports
 ```
 
-### Folder Structure
+### Folder Structure (Current Layout)
 
 ```
 ServerAuditToolkitv2/
-├── Invoke-ServerAudit.ps1           [Main orchestrator — PS 2.0 baseline]
-├── Invoke-ServerAudit-PS5.ps1        [PS 5.1+ optimized orchestrator]
-├── Invoke-ServerAudit-PS7.ps1        [PS 7.x advanced orchestrator]
+├── Invoke-ServerAudit.ps1           [Main orchestrator (auto version detection)]
 │
 ├── src/
 │   ├── Collectors/                   [All collector scripts]
@@ -231,7 +232,11 @@ ServerAuditToolkitv2/
 │   │   ├── Test-Prerequisites.ps1          [WinRM, RPC, credential validation]
 │   │   └── Write-StructuredLog.ps1         [JSON logging]
 │   │
-│   └── ServerAuditToolkitV2.psd1    [Module manifest]
+│   ├── Collectors/                 [Collector scripts (+ version variants)]
+│   ├── Private/                    [Internal utility functions]
+│   └── (other implementation scripts)
+├── ServerAuditToolkitV2.psd1        [Module manifest (root)]
+├── ServerAuditToolkitV2.psm1        [Module entry point (root)]
 │
 ├── lib/                              [Shared utility functions (future)]
 │   ├── Get-CollectorMetadata.ps1
