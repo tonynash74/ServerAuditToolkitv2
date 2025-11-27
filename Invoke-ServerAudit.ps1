@@ -293,7 +293,8 @@ function ConvertTo-HashtableRecursive {
     if ($InputObject -is [hashtable]) {
         $clone = @{}
         foreach ($key in $InputObject.Keys) {
-            $clone[$key] = ConvertTo-HashtableRecursive -InputObject $InputObject[$key]
+            $stringKey = if ($null -ne $key) { [string]$key } else { '' }
+            $clone[$stringKey] = ConvertTo-HashtableRecursive -InputObject $InputObject[$key]
         }
         return $clone
     }
@@ -301,12 +302,13 @@ function ConvertTo-HashtableRecursive {
     if ($InputObject -is [System.Collections.IDictionary]) {
         $converted = @{}
         foreach ($key in $InputObject.Keys) {
-            $converted[$key] = ConvertTo-HashtableRecursive -InputObject $InputObject[$key]
+            $stringKey = if ($null -ne $key) { [string]$key } else { '' }
+            $converted[$stringKey] = ConvertTo-HashtableRecursive -InputObject $InputObject[$key]
         }
         return $converted
     }
 
-    if ($InputObject -is [pscustomobject]) {
+    if ($InputObject -is [System.Management.Automation.PSCustomObject]) {
         $hashtable = @{}
         foreach ($prop in $InputObject.PSObject.Properties) {
             $hashtable[$prop.Name] = ConvertTo-HashtableRecursive -InputObject $prop.Value
@@ -323,6 +325,59 @@ function ConvertTo-HashtableRecursive {
     }
 
     return $InputObject
+}
+
+function Convert-ErrorForReport {
+    param(
+        [Parameter(Mandatory=$false)]
+        $ErrorInput
+    )
+
+    if ($null -eq $ErrorInput) {
+        return $null
+    }
+
+    if ($ErrorInput -is [System.Management.Automation.ErrorRecord]) {
+        return @{
+            Message               = $ErrorInput.Exception.Message
+            Category              = $ErrorInput.CategoryInfo.Category.ToString()
+            FullyQualifiedErrorId = $ErrorInput.FullyQualifiedErrorId
+            TargetObject          = if ($ErrorInput.TargetObject) { "$($ErrorInput.TargetObject)" } else { $null }
+            ScriptStackTrace      = $ErrorInput.ScriptStackTrace
+            Timestamp             = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+        }
+    }
+
+    return "$ErrorInput"
+}
+
+function Convert-ErrorsForExport {
+    param(
+        [Parameter(Mandatory=$false)]
+        [object[]]$Errors
+    )
+
+    if (-not $Errors -or $Errors.Count -eq 0) {
+        return @()
+    }
+
+    $convertedErrors = @()
+    foreach ($errorEntry in $Errors) {
+        $normalized = Convert-ErrorForReport -ErrorInput $errorEntry
+
+        if ($null -eq $normalized) {
+            continue
+        }
+
+        if ($normalized -is [hashtable] -or $normalized -is [System.Collections.IDictionary] -or $normalized -is [pscustomobject]) {
+            $convertedErrors += (ConvertTo-HashtableRecursive -InputObject $normalized)
+        }
+        else {
+            $convertedErrors += "$normalized"
+        }
+    }
+
+    return $convertedErrors
 }
 
 function Update-AuditSummaryCounters {
@@ -999,14 +1054,16 @@ function Invoke-ServerAudit {
                     }
 
                     if ($result.Errors -and $result.Errors.Count -gt 0) {
-                        $serverResults.Errors += $result.Errors
+                        foreach ($err in $result.Errors) {
+                            $serverResults.Errors += (Convert-ErrorForReport -ErrorInput $err)
+                        }
                     }
                 }
 
             } catch {
                 Write-AuditLog "Server audit failed: $_" -Level Error
                 $serverResults.Success = $false
-                $serverResults.Errors += $_
+                $serverResults.Errors += (Convert-ErrorForReport -ErrorInput $_)
             } finally {
                 $serverStopwatch.Stop()
                 $serverResults.ExecutionEndTime = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
@@ -1079,7 +1136,10 @@ function Invoke-ServerAudit {
 
             # Export results
             Write-AuditLog "Exporting audit results to $OutputPath..." -Level Information
-            Export-AuditResults -Results $auditSession.AuditResults -OutputPath $OutputPath
+            Export-AuditResults `
+                -Results $auditSession.AuditResults `
+                -OutputPath $OutputPath `
+                -SkipServerDetails:$DryRun
 
             # Display summary
             Write-AuditLog "====================================" -Level Information
@@ -1288,7 +1348,9 @@ function Invoke-SingleCollector {
                 Write-AuditLog " [FAILED]" -Level Information
                 $result.Status = 'FAILED'
                 if ($collectorOutput.Errors) {
-                    $result.Errors += $collectorOutput.Errors
+                    foreach ($err in $collectorOutput.Errors) {
+                        $result.Errors += (Convert-ErrorForReport -ErrorInput $err)
+                    }
                 }
             }
         } catch {
@@ -1296,13 +1358,13 @@ function Invoke-SingleCollector {
             $result.ExecutionTime = [Math]::Round($stopwatch.Elapsed.TotalSeconds, 2)
             Write-AuditLog " [ERROR - $($result.ExecutionTime)s]" -Level Information
             $result.Status = 'FAILED'
-            $result.Errors += $_
+            $result.Errors += (Convert-ErrorForReport -ErrorInput $_)
         }
 
     } catch {
         Write-AuditLog " [ERROR]" -Level Information
         $result.Status = 'FAILED'
-        $result.Errors += $_
+        $result.Errors += (Convert-ErrorForReport -ErrorInput $_)
     }
 
     return $result
@@ -1355,7 +1417,7 @@ function Invoke-ParallelCollectors {
     $psVersionMajor = $psVersionParsed.Major
 
     $initialSession = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-    foreach ($funcName in @('Invoke-SingleCollector', 'Write-AuditLog')) {
+    foreach ($funcName in @('Invoke-SingleCollector', 'Write-AuditLog', 'Convert-ErrorForReport')) {
         $func = Get-Command -Name $funcName -CommandType Function -ErrorAction Stop
         $entry = New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry ($funcName, $func.Definition)
         $initialSession.Commands.Add($entry)
@@ -1482,7 +1544,10 @@ function Write-AuditLog {
 
         [Parameter(Mandatory=$false)]
         [ValidateSet('Verbose', 'Information', 'Warning', 'Error')]
-        [string]$Level = 'Information'
+        [string]$Level = 'Information',
+
+        [Parameter()]
+        [switch]$NoNewline
     )
 
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
@@ -1495,10 +1560,34 @@ function Write-AuditLog {
 
     # Write to console based on level
     switch ($Level) {
-        'Verbose'   { Write-Verbose $Message }
-        'Information' { Write-Host $Message -ForegroundColor Cyan }
-        'Warning'   { Write-Host $Message -ForegroundColor Yellow }
-        'Error'     { Write-Host $Message -ForegroundColor Red }
+        'Verbose' {
+            if ($NoNewline) {
+                Write-Host $Message -ForegroundColor DarkGray -NoNewline
+            } else {
+                Write-Verbose $Message
+            }
+        }
+        'Information' {
+            if ($NoNewline) {
+                Write-Host $Message -ForegroundColor Cyan -NoNewline
+            } else {
+                Write-Host $Message -ForegroundColor Cyan
+            }
+        }
+        'Warning' {
+            if ($NoNewline) {
+                Write-Host $Message -ForegroundColor Yellow -NoNewline
+            } else {
+                Write-Host $Message -ForegroundColor Yellow
+            }
+        }
+        'Error' {
+            if ($NoNewline) {
+                Write-Host $Message -ForegroundColor Red -NoNewline
+            } else {
+                Write-Host $Message -ForegroundColor Red
+            }
+        }
     }
 }
 
@@ -1534,16 +1623,69 @@ function Export-AuditResults {
         [hashtable]$Results,
 
         [Parameter(Mandatory=$true)]
-        [string]$OutputPath
+        [string]$OutputPath,
+
+        [Parameter()]
+        [switch]$SkipServerDetails
     )
 
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 
     # Export JSON (raw data)
     $jsonPath = Join-Path -Path $OutputPath -ChildPath "audit_$timestamp.json"
+    $hasServers = $Results.ContainsKey('Servers') -and $Results.Servers
+    $shouldExportFull = -not $SkipServerDetails -and $hasServers -and $Results.Servers.Count -gt 0
     try {
-        $serializable = ConvertTo-HashtableRecursive -InputObject $Results
-        $serializable | ConvertTo-Json -Depth 10 | Out-File -LiteralPath $jsonPath -Encoding UTF8 -Force
+        if ($shouldExportFull) {
+            $metaProperties = @(
+                @{ Name = 'PSVersion';           Value = $Results.PSVersion;           Depth = 2 },
+                @{ Name = 'SessionId';           Value = $Results.SessionId;           Depth = 2 },
+                @{ Name = 'Timestamp';           Value = if ($Results.Timestamp) { [string]$Results.Timestamp } else { $null }; Depth = 2 },
+                @{ Name = 'Summary';             Value = if ($Results.Summary) { ConvertTo-HashtableRecursive -InputObject $Results.Summary } else { $null }; Depth = 8 },
+                @{ Name = 'PerformanceProfiles'; Value = if ($Results.PerformanceProfiles) { ConvertTo-HashtableRecursive -InputObject $Results.PerformanceProfiles } else { @() }; Depth = 8 }
+            )
+
+            $writer = New-Object System.IO.StreamWriter($jsonPath, $false, [System.Text.Encoding]::UTF8)
+            try {
+                $writer.WriteLine('{')
+                for ($i = 0; $i -lt $metaProperties.Count; $i++) {
+                    $prop = $metaProperties[$i]
+                    $valueJson = $prop.Value | ConvertTo-Json -Depth $prop.Depth -Compress
+                    $writer.WriteLine("  `"$($prop.Name)`": $valueJson,")
+                }
+
+                $writer.WriteLine('  "Servers": [')
+                for ($i = 0; $i -lt $Results.Servers.Count; $i++) {
+                    $serverResult = $Results.Servers[$i]
+                    $serverSerializable = ConvertTo-HashtableRecursive -InputObject $serverResult
+                    $serverSerializable['Errors'] = Convert-ErrorsForExport -Errors $serverResult.Errors
+                    $serverJson = $serverSerializable | ConvertTo-Json -Depth 12 -Compress
+                    if ($i -lt ($Results.Servers.Count - 1)) {
+                        $writer.WriteLine("    $serverJson,")
+                    }
+                    else {
+                        $writer.WriteLine("    $serverJson")
+                    }
+                }
+                $writer.WriteLine('  ]')
+                $writer.WriteLine('}')
+            }
+            finally {
+                $writer.Dispose()
+            }
+        }
+        else {
+            $summaryOnly = [ordered]@{
+                PSVersion           = $Results.PSVersion
+                SessionId           = $Results.SessionId
+                Timestamp           = $Results.Timestamp
+                Summary             = $Results.Summary
+                PerformanceProfiles = $Results.PerformanceProfiles
+                Servers             = @()
+                Notes               = 'Server-level details omitted (dry run or no collector data).'
+            }
+            $summaryOnly | ConvertTo-Json -Depth 6 | Out-File -LiteralPath $jsonPath -Encoding UTF8 -Force
+        }
         Write-AuditLog "Exported: $jsonPath" -Level Verbose
     } catch {
         Write-AuditLog "Failed to export JSON: $_" -Level Warning
@@ -1552,15 +1694,21 @@ function Export-AuditResults {
     # Export CSV (per-server summary)
     $csvPath = Join-Path -Path $OutputPath -ChildPath "audit_summary_$timestamp.csv"
     try {
-        $Results.Servers | Select-Object `
-            ComputerName,
-            Success,
-            ParallelismUsed,
-            TimeoutUsed,
-            ExecutionTimeSeconds,
-            @{Name='CollectorsSucceeded'; Expression={$_.CollectorsSummary.Succeeded}},
-            @{Name='CollectorsFailed'; Expression={$_.CollectorsSummary.Failed}} |
-        Export-Csv -LiteralPath $csvPath -NoTypeInformation -Force
+        if (-not $SkipServerDetails -and $hasServers -and $Results.Servers.Count -gt 0) {
+            $Results.Servers | Select-Object `
+                ComputerName,
+                Success,
+                ParallelismUsed,
+                TimeoutUsed,
+                ExecutionTimeSeconds,
+                @{Name='CollectorsSucceeded'; Expression={$_.CollectorsSummary.Succeeded}},
+                @{Name='CollectorsFailed'; Expression={$_.CollectorsSummary.Failed}} |
+            Export-Csv -LiteralPath $csvPath -NoTypeInformation -Force
+        }
+        else {
+            "ComputerName,Success,ParallelismUsed,TimeoutUsed,ExecutionTimeSeconds,CollectorsSucceeded,CollectorsFailed" | `
+                Out-File -LiteralPath $csvPath -Encoding UTF8 -Force
+        }
 
         Write-AuditLog "Exported: $csvPath" -Level Verbose
     } catch {
