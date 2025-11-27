@@ -1003,6 +1003,8 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 ### Roadmap (Future Sprints)
 
+- Unified Orchestrator: Merge PS 2.0/4.0/5.1/7.x entry points into a single orchestrator that detects local and remote PowerShell versions per target, then selects the appropriate collector variants dynamically. Deprecate version-specific scripts after parity.
+
 - 📋 **T4 (In Progress):** Migration Decisions Engine
   - ✅ Phase 1: Core analysis engine (Analyze-MigrationReadiness.ps1)
   - ✅ Phase 2: Integration & reporting (Invoke-MigrationDecisions.ps1, New-MigrationReport.ps1)
