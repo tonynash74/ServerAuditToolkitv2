@@ -1,0 +1,57 @@
+name: PowerShell CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  psci:
+    name: PowerShell CI
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup PowerShell
+      uses: actions/setup-powershell@v2
+      with:
+        pwsh-version: '7.3'
+
+    - name: Install PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -AllowClobber
+
+    - name: Import module manifest
+      shell: pwsh
+      run: |
+        $manifestPath = 'ServerAuditToolkitV2.psd1'
+        if (-not (Test-Path $manifestPath)) {
+          Write-Error "Module manifest '$manifestPath' not found in repository root."
+          exit 1
+        }
+        Import-Module $manifestPath -Force -ErrorAction Stop
+        Write-Host "Imported module manifest: $manifestPath"
+
+    - name: Verify exported commands
+      shell: pwsh
+      run: |
+        if (-not (Get-Command Invoke-ServerAudit -ErrorAction SilentlyContinue)) {
+          Write-Error "Invoke-ServerAudit not found after module import."
+          exit 1
+        }
+        Write-Host "Invoke-ServerAudit is exported by the module."
+
+    - name: Run PSScriptAnalyzer (errors/warnings fail)
+      shell: pwsh
+      run: |
+        $issues = Invoke-ScriptAnalyzer -Path '.' -Recurse -Severity Error,Warning -ErrorAction SilentlyContinue
+        if ($issues -and $issues.Count -gt 0) {
+          $issues | Select-Object Severity,RuleName,Message,ScriptName,Line | Format-Table -AutoSize
+          Write-Error "PSScriptAnalyzer detected $($issues.Count) issues (errors/warnings)."
+          exit 1
+        }
+        Write-Host "PSScriptAnalyzer found no errors or warnings."
