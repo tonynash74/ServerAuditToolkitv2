@@ -179,8 +179,8 @@ try {
 if (-not $moduleImported) {
     # Look for a local manifest in a few likely locations (script root, script root/src, parent)
     $candidates = @(
-        Join-Path -Path $PSScriptRoot -ChildPath 'ServerAuditToolkitV2.psd1',
-        Join-Path -Path $PSScriptRoot -ChildPath 'src\ServerAuditToolkitV2.psd1',
+        Join-Path -Path $PSScriptRoot -ChildPath 'ServerAuditToolkitV2.psd1'
+        Join-Path -Path $PSScriptRoot -ChildPath 'src\ServerAuditToolkitV2.psd1'
         Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'ServerAuditToolkitV2.psd1'
     )
 
@@ -204,13 +204,13 @@ if (-not $moduleImported) {
 if (-not $moduleImported) {
     # Graceful guidance for users who manually deploy/copy the repo
     $readmePathCandidates = @(
-        Join-Path -Path $PSScriptRoot -ChildPath 'README.md',
+        Join-Path -Path $PSScriptRoot -ChildPath 'README.md'
         Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'README.md'
     )
     $readmePath = $readmePathCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
     $installScriptCandidates = @(
-        Join-Path -Path $PSScriptRoot -ChildPath 'Install-LocalModule.ps1',
+        Join-Path -Path $PSScriptRoot -ChildPath 'Install-LocalModule.ps1'
         Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'Install-LocalModule.ps1'
     )
     $installScript = $installScriptCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -238,7 +238,7 @@ if (-not $moduleImported) {
 
 # Load collector helper module once so orchestrator and runspaces share the same functions
 $collectorHelperCandidates = @(
-    Join-Path -Path $PSScriptRoot -ChildPath 'src\Collectors\CollectorSupport.psm1',
+    Join-Path -Path $PSScriptRoot -ChildPath 'src\Collectors\CollectorSupport.psm1'
     Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'src\Collectors\CollectorSupport.psm1'
 )
 
