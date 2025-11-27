@@ -429,14 +429,14 @@ Notes:
 
 Uninstalling the locally installed module
 
-If you used `scripts/Install-LocalModule.ps1` to install the module for local testing, you can remove it with the included uninstall helper:
+If you used `Install-LocalModule.ps1` (now located in the repository root) to install the module for local testing, you can remove it with the included uninstall helper:
 
 ```powershell
 # From the repository root on the target machine
-.\scripts\Uninstall-LocalModule.ps1 -Force
+.\Uninstall-LocalModule.ps1 -Force
 
 # Or run interactively without -Force to confirm before deletion
-.\scripts\Uninstall-LocalModule.ps1
+.\Uninstall-LocalModule.ps1
 ```
 
 The uninstall script detects redirected `Documents` locations (OneDrive) and will remove the `ServerAuditToolkitV2` folder from the appropriate user modules path. It also attempts to `Remove-Module` from the current session.
