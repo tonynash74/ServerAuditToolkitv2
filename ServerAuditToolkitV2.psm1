@@ -106,5 +106,5 @@ function Invoke-ServerAudit {
 Export-ModuleMember -Function @(
   'Invoke-ServerAudit',
   'Get-CollectorMetadata','Get-CompatibleCollectors','Get-CompatibleCollectorsByOS','Get-CollectorVariant','Test-CollectorDependencies','Get-WindowsVersionFromBuild','Get-CollectorSummary',
-  'Get-ServerCapabilities','Get-ProcessorInfo','Get-RAMInfo','Get-DiskPerformance','Test-NetworkConnectivity','Get-SystemLoad','Calculate-ParallelismBudget'
+  'Get-ServerCapabilities','Get-ProcessorInfo','Get-RAMInfo','Get-DiskPerformance','Test-NetworkConnectivity','Get-SystemLoad','Calculate-ParallelismBudget','Remove-ServerCapabilityCache'
 )

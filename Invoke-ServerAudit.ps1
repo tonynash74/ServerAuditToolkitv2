@@ -29,6 +29,11 @@
     If $true, skips T2 profiling; uses conservative defaults (1 job, 60s timeout).
     Faster but less optimal parallelism.
 
+.PARAMETER PersistPerformanceProfileCache
+    Keeps the cached performance profile files after an audit completes.
+    By default, cache files are removed once profiling is done to ensure
+    fresh measurements on each run.
+
 .PARAMETER UseCollectorCache
     If $true, loads collectors from cache (if available).
     If $false, always fresh-load collectors.
@@ -113,6 +118,9 @@ param(
 
     [Parameter(Mandatory=$false)]
     [switch]$SkipPerformanceProfile,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$PersistPerformanceProfileCache,
 
     [Parameter(Mandatory=$false)]
     [switch]$UseCollectorCache = $true,
@@ -1295,6 +1303,17 @@ function Invoke-ServerAudit {
                 $serverStopwatch.Stop()
                 $serverResults.ExecutionEndTime = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
                 $serverResults.ExecutionTimeSeconds = [Math]::Round($serverStopwatch.Elapsed.TotalSeconds, 2)
+
+                if (-not $SkipPerformanceProfile -and -not $PersistPerformanceProfileCache) {
+                    try {
+                        $removed = Remove-ServerCapabilityCache -ComputerName $server
+                        if ($removed) {
+                            Write-AuditLog "Cleared performance profile cache for $server" -Level Verbose
+                        }
+                    } catch {
+                        Write-AuditLog "Failed to clear performance profile cache for $server: $_" -Level Warning
+                    }
+                }
             }
 
             # Add to audit results / stream

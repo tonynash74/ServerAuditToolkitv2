@@ -164,6 +164,22 @@ $results = .\Invoke-ServerAudit.ps1 `
 # support PS 4.0-era collectors, or when you want to test older variants.
 
 .\Invoke-ServerAudit.ps1 -ComputerName "SERVER01" -CollectorPSVersion '4.0'
+
+### Performance Profile Cache (T2)
+
+- `Invoke-ServerAudit` now deletes the cached performance profile (`%TEMP%\ServerAuditToolkit\Profiles\{ComputerName}-profile.json`) as soon as a run completes so every audit gets a fresh measurement.
+- Use `-PersistPerformanceProfileCache` when you explicitly want to re-use the cached profile across runs (e.g., repeated rehearsals during a migration wave).
+- You can also clear or refresh a cache outside of the orchestrator with `Remove-ServerCapabilityCache` or by running `Get-ServerCapabilities -UseCache:$false`.
+
+```powershell
+# Keep the cache file for repeated dry runs
+.\Invoke-ServerAudit.ps1 -ComputerName "SERVER01" -PersistPerformanceProfileCache
+
+# Manually invalidate a cache entry if needed
+Remove-ServerCapabilityCache -ComputerName "SERVER01"
+```
+
+> See `docs/performance-profile-schema.md` for full profiling schema details.
 ```
 
 ---

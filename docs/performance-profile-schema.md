@@ -127,12 +127,22 @@ Overall = (70 × 1.3) + 60 = 151 seconds ≈ 2.5 minutes
 
 ## Cache Invalidation
 
-Profiles are considered stale after **24 hours**. 
+Profiles are considered stale after **24 hours**. Starting in this build,
+`Invoke-ServerAudit` automatically removes the cached profile for each server
+as soon as profiling completes. This guarantees that every future audit starts
+with a fresh measurement unless you explicitly opt-in to cache persistence.
 
-To force re-profiling:
+To keep cache files for repeated re-use, run:
+
+```powershell
+Invoke-ServerAudit -ComputerName "SERVER01" -PersistPerformanceProfileCache
+```
+
+If you need to force re-profiling outside the orchestrator:
+
 ```powershell
 # Option 1: Delete cache file manually
-Remove-Item "$env:TEMP\ServerAuditToolkit\Profiles\SERVER01-profile.json"
+Remove-ServerCapabilityCache -ComputerName "SERVER01"
 
 # Option 2: Use -UseCache:$false in Get-ServerCapabilities
 $cap = Get-ServerCapabilities -ComputerName "SERVER01" -UseCache:$false

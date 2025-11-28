@@ -648,6 +648,49 @@ function Calculate-ParallelismBudget {
     }
 }
 
+<#
+.SYNOPSIS
+    Removes cached performance profiles for a server.
+
+.PARAMETER ComputerName
+    Target server name used when profiling (determines cache filename).
+
+.PARAMETER CacheDirectory
+    Optional cache directory override. Defaults to the same directory used by
+    Get-ServerCapabilities when not specified.
+
+.NOTES
+    Used to automatically purge stale performance data after an audit run.
+#>
+function Remove-ServerCapabilityCache {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory=$false)]
+        [string]$CacheDirectory
+    )
+
+    if ([string]::IsNullOrEmpty($CacheDirectory)) {
+        $CacheDirectory = Join-Path -Path $env:TEMP -ChildPath "ServerAuditToolkit\Profiles"
+    }
+
+    $cacheFile = Join-Path -Path $CacheDirectory -ChildPath ("{0}-profile.json" -f $ComputerName)
+
+    if (-not (Test-Path -LiteralPath $cacheFile)) {
+        return $false
+    }
+
+    try {
+        Remove-Item -LiteralPath $cacheFile -Force -ErrorAction Stop
+        return $true
+    } catch {
+        throw "Failed to remove cache file '$cacheFile': $_"
+    }
+}
+
 # Export functions only when running inside a module
 if ($ExecutionContext.SessionState.Module) {
     Export-ModuleMember -Function @(
@@ -657,6 +700,7 @@ if ($ExecutionContext.SessionState.Module) {
         'Get-DiskPerformance',
         'Test-NetworkConnectivity',
         'Get-SystemLoad',
-        'Calculate-ParallelismBudget'
+        'Calculate-ParallelismBudget',
+        'Remove-ServerCapabilityCache'
     )
 }
