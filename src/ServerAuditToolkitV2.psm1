@@ -35,7 +35,7 @@ if (Test-Path $privateDir) {
 $collectDir = Join-Path $script:ModuleRoot 'Collectors'
 $script:CollectorFiles = @()
 if (Test-Path $collectDir) {
-  $script:CollectorFiles = Get-ChildItem -Path $collectDir -Filter *.ps1 | Where-Object { -not $_.PSIsContainer } | Sort-Object Name
+  $script:CollectorFiles = Get-ChildItem -Path $collectDir -Filter *.ps1 -Recurse | Where-Object { -not $_.PSIsContainer } | Sort-Object FullName
   foreach ($f in $script:CollectorFiles) { . $f.FullName }
 }
 

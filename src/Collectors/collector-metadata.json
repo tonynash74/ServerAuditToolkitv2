@@ -14,10 +14,10 @@
       "estimatedExecutionTime": 10,
       "criticalForMigration": true,
       "variants": {
-        "2.0": "Get-ServerInfo.ps1",
-        "4.0": "Get-ServerInfo.ps1",
-        "5.1": "Get-ServerInfo-PS5.ps1",
-        "7.0": "Get-ServerInfo-PS7.ps1"
+        "2.0": "PS2x\\Get-ServerInfo.ps1",
+        "4.0": "PS2x\\Get-ServerInfo.ps1",
+        "5.1": "PS5x\\Get-ServerInfo-PS5.ps1",
+        "7.0": "PS5x\\Get-ServerInfo-PS5.ps1"
       }
     },
     {
@@ -26,7 +26,7 @@
       "description": "Collects AD membership, group policy, and domain information",
       "filename": "Get-ADInfo.ps1",
       "category": "infrastructure",
-      "psVersions": ["2.0", "4.0", "5.1"],
+      "psVersions": ["2.0", "4.0", "5.1", "7.0"],
       "minWindowsVersion": "2008R2",
       "maxWindowsVersion": null,
       "dependencies": ["RSAT-AD-PowerShell"],
@@ -34,9 +34,10 @@
       "estimatedExecutionTime": 20,
       "criticalForMigration": true,
       "variants": {
-        "2.0": "Get-ADInfo.ps1",
-        "4.0": "Get-ADInfo.ps1",
-        "5.1": "Get-ADInfo-PS5.ps1"
+        "2.0": "PS2x\\Get-ADInfo.ps1",
+        "4.0": "PS2x\\Get-ADInfo.ps1",
+        "5.1": "PS5x\\Get-ADInfo-PS5.ps1",
+        "7.0": "PS5x\\Get-ADInfo-PS5.ps1"
       }
     },
     {
@@ -53,10 +54,10 @@
       "estimatedExecutionTime": 25,
       "criticalForMigration": false,
       "variants": {
-        "2.0": "Get-IISInfo.ps1",
-        "4.0": "Get-IISInfo.ps1",
-        "5.1": "Get-IISInfo-PS5.ps1",
-        "7.0": "Get-IISInfo-PS7.ps1"
+        "2.0": "PS2x\\Get-IISInfo.ps1",
+        "4.0": "PS2x\\Get-IISInfo.ps1",
+        "5.1": "PS5x\\Get-IISInfo-PS5.ps1",
+        "7.0": "PS5x\\Get-IISInfo-PS5.ps1"
       }
     },
     {
@@ -73,9 +74,10 @@
       "estimatedExecutionTime": 40,
       "criticalForMigration": true,
       "variants": {
-        "2.0": "Get-SQLServerInfo.ps1",
-        "4.0": "Get-SQLServerInfo.ps1",
-        "5.1": "Get-SQLServerInfo-PS5.ps1"
+        "2.0": "PS2x\\Get-SQLServerInfo.ps1",
+        "4.0": "PS2x\\Get-SQLServerInfo.ps1",
+        "5.1": "PS5x\\Get-SQLServerInfo-PS5.ps1",
+        "7.0": "PS5x\\Get-SQLServerInfo-PS5.ps1"
       }
     },
     {
@@ -92,9 +94,9 @@
       "estimatedExecutionTime": 30,
       "criticalForMigration": false,
       "variants": {
-        "4.0": "Get-HyperVInfo.ps1",
-        "5.1": "Get-HyperVInfo-PS5.ps1",
-        "7.0": "Get-HyperVInfo-PS7.ps1"
+        "4.0": "PS4x\\Get-HyperVInfo.ps1",
+        "5.1": "PS5x\\Get-HyperVInfo-PS5.ps1",
+        "7.0": "PS7x\\Get-HyperVInfo-PS7.ps1"
       }
     },
     {
@@ -111,10 +113,10 @@
       "estimatedExecutionTime": 10,
       "criticalForMigration": false,
       "variants": {
-        "2.0": "Get-Services.ps1",
-        "4.0": "Get-Services.ps1",
-        "5.1": "Get-Services-PS5.ps1",
-        "7.0": "Get-Services-PS7.ps1"
+        "2.0": "PS2x\\Get-Services.ps1",
+        "4.0": "PS2x\\Get-Services.ps1",
+        "5.1": "PS5x\\Get-Services-PS5.ps1",
+        "7.0": "PS5x\\Get-Services-PS5.ps1"
       }
     },
     {
@@ -131,10 +133,10 @@
       "estimatedExecutionTime": 20,
       "criticalForMigration": true,
       "variants": {
-        "2.0": "Get-InstalledApps.ps1",
-        "4.0": "Get-InstalledApps.ps1",
-        "5.1": "Get-InstalledApps-PS5.ps1",
-        "7.0": "Get-InstalledApps-PS7.ps1"
+        "2.0": "PS2x\\Get-InstalledApps.ps1",
+        "4.0": "PS2x\\Get-InstalledApps.ps1",
+        "5.1": "PS2x\\Get-InstalledApps.ps1",
+        "7.0": "PS2x\\Get-InstalledApps.ps1"
       }
     },
     {
@@ -150,7 +152,13 @@
       "timeout": 30,
       "estimatedExecutionTime": 15,
       "criticalForMigration": true,
-      "priority": "TIER1"
+      "priority": "TIER1",
+      "variants": {
+        "2.0": "PS2x\\Get-ServerRoles.ps1",
+        "4.0": "PS2x\\Get-ServerRoles.ps1",
+        "5.1": "PS2x\\Get-ServerRoles.ps1",
+        "7.0": "PS2x\\Get-ServerRoles.ps1"
+      }
     },
     {
       "name": "Get-ShareInfo",
@@ -165,7 +173,13 @@
       "timeout": 60,
       "estimatedExecutionTime": 30,
       "criticalForMigration": true,
-      "priority": "TIER2"
+      "priority": "TIER2",
+      "variants": {
+        "2.0": "PS2x\\Get-ShareInfo.ps1",
+        "4.0": "PS2x\\Get-ShareInfo.ps1",
+        "5.1": "PS2x\\Get-ShareInfo.ps1",
+        "7.0": "PS2x\\Get-ShareInfo.ps1"
+      }
     },
     {
       "name": "Get-LocalAccounts",
@@ -180,7 +194,13 @@
       "timeout": 30,
       "estimatedExecutionTime": 15,
       "criticalForMigration": true,
-      "priority": "TIER2"
+      "priority": "TIER2",
+      "variants": {
+        "2.0": "PS2x\\Get-LocalAccounts.ps1",
+        "4.0": "PS2x\\Get-LocalAccounts.ps1",
+        "5.1": "PS2x\\Get-LocalAccounts.ps1",
+        "7.0": "PS2x\\Get-LocalAccounts.ps1"
+      }
     },
     {
       "name": "Get-ExchangeInfo",
@@ -195,7 +215,13 @@
       "timeout": 90,
       "estimatedExecutionTime": 45,
       "criticalForMigration": false,
-      "priority": "TIER3"
+      "priority": "TIER3",
+      "variants": {
+        "2.0": "PS2x\\Get-ExchangeInfo.ps1",
+        "4.0": "PS2x\\Get-ExchangeInfo.ps1",
+        "5.1": "PS2x\\Get-ExchangeInfo.ps1",
+        "7.0": "PS2x\\Get-ExchangeInfo.ps1"
+      }
     },
     {
       "name": "Data-Discovery-PII",
@@ -210,7 +236,13 @@
       "timeout": 300,
       "estimatedExecutionTime": 120,
       "criticalForMigration": true,
-      "priority": "TIER4"
+      "priority": "TIER4",
+      "variants": {
+        "2.0": "PS2x\\Data-Discovery-PII.ps1",
+        "4.0": "PS2x\\Data-Discovery-PII.ps1",
+        "5.1": "PS2x\\Data-Discovery-PII.ps1",
+        "7.0": "PS2x\\Data-Discovery-PII.ps1"
+      }
     },
     {
       "name": "Data-Discovery-FinancialUK",
@@ -225,7 +257,13 @@
       "timeout": 300,
       "estimatedExecutionTime": 120,
       "criticalForMigration": true,
-      "priority": "TIER4"
+      "priority": "TIER4",
+      "variants": {
+        "2.0": "PS2x\\Data-Discovery-FinancialUK.ps1",
+        "4.0": "PS2x\\Data-Discovery-FinancialUK.ps1",
+        "5.1": "PS2x\\Data-Discovery-FinancialUK.ps1",
+        "7.0": "PS2x\\Data-Discovery-FinancialUK.ps1"
+      }
     },
     {
       "name": "Data-Discovery-HeatMap",
@@ -240,7 +278,13 @@
       "timeout": 300,
       "estimatedExecutionTime": 180,
       "criticalForMigration": true,
-      "priority": "TIER4"
+      "priority": "TIER4",
+      "variants": {
+        "2.0": "PS2x\\Data-Discovery-HeatMap.ps1",
+        "4.0": "PS2x\\Data-Discovery-HeatMap.ps1",
+        "5.1": "PS2x\\Data-Discovery-HeatMap.ps1",
+        "7.0": "PS2x\\Data-Discovery-HeatMap.ps1"
+      }
     },
     {
       "name": "Get-ScheduledTasks",
@@ -255,7 +299,13 @@
       "timeout": 60,
       "estimatedExecutionTime": 30,
       "criticalForMigration": true,
-      "priority": "TIER5"
+      "priority": "TIER5",
+      "variants": {
+        "2.0": "PS2x\\Get-ScheduledTasks.ps1",
+        "4.0": "PS2x\\Get-ScheduledTasks.ps1",
+        "5.1": "PS2x\\Get-ScheduledTasks.ps1",
+        "7.0": "PS2x\\Get-ScheduledTasks.ps1"
+      }
     },
     {
       "name": "Get-CertificateInfo",
@@ -270,7 +320,13 @@
       "timeout": 30,
       "estimatedExecutionTime": 15,
       "criticalForMigration": true,
-      "priority": "TIER5"
+      "priority": "TIER5",
+      "variants": {
+        "2.0": "PS2x\\Get-CertificateInfo.ps1",
+        "4.0": "PS2x\\Get-CertificateInfo.ps1",
+        "5.1": "PS2x\\Get-CertificateInfo.ps1",
+        "7.0": "PS2x\\Get-CertificateInfo.ps1"
+      }
     },
     {
       "name": "Get-DocumentLinks",
