@@ -158,6 +158,12 @@ $results = .\Invoke-ServerAudit.ps1 `
 # Dry-run lists chosen variant per collector without executing.
 
 .\Invoke-ServerAudit.ps1 -ComputerName "SERVER01" -DryRun -Verbose
+
+# Override the auto-detected version if you need to force a specific collector set.
+# Useful when running locally on PS 7.x but targeting legacy hosts that only
+# support PS 4.0-era collectors, or when you want to test older variants.
+
+.\Invoke-ServerAudit.ps1 -ComputerName "SERVER01" -CollectorPSVersion '4.0'
 ```
 
 ---

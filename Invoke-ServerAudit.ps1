@@ -101,6 +101,10 @@ param(
     [string[]]$Collectors,
 
     [Parameter(Mandatory=$false)]
+    [ValidateSet('2.0', '4.0', '5.1', '7.0')]
+    [string]$CollectorPSVersion,
+
+    [Parameter(Mandatory=$false)]
     [switch]$DryRun,
 
     [Parameter(Mandatory=$false)]
@@ -496,11 +500,13 @@ function Invoke-ServerAudit {
             TotalServersToAudit    = 0
             CollectorMetadata      = $null
             CompatibleCollectors   = @()
+            CollectorPsVersion     = $null
             AuditResults           = @{
                 Servers             = @()
                 Timestamp           = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
                 PSVersion           = $null
                 SessionId           = $null
+                CollectorPSVersion  = $null
                 PerformanceProfiles = @()
                 Summary             = @{}
             }
@@ -722,14 +728,28 @@ function Invoke-ServerAudit {
             Write-AuditLog "Loaded $($auditSession.CollectorMetadata.collectors.Count) collector definitions" -Level Verbose
 
             # Filter by PS version
-            $effectivePsVersion = $auditSession.LocalPSVersion
-            try {
-                $parsedVersion = [version]$auditSession.LocalPSVersion
-                if ($parsedVersion.Major -ge 6) {
-                    $effectivePsVersion = '5.1'
-                    Write-AuditLog "No PS$($parsedVersion.Major) collectors defined; falling back to PS 5.1 compatibility set." -Level Warning
-                }
-            } catch {}
+            $effectivePsVersion = $null
+
+            if ($PSBoundParameters.ContainsKey('CollectorPSVersion')) {
+                $effectivePsVersion = $CollectorPSVersion
+                Write-AuditLog "User override: forcing collector PS version $effectivePsVersion" -Level Information
+            } else {
+                $effectivePsVersion = $auditSession.LocalPSVersion
+                try {
+                    $parsedVersion = [version]$auditSession.LocalPSVersion
+                    if ($parsedVersion.Major -ge 6) {
+                        $effectivePsVersion = '5.1'
+                        Write-AuditLog "No PS$($parsedVersion.Major) collectors defined; falling back to PS 5.1 compatibility set." -Level Warning
+                    }
+                } catch {}
+            }
+
+            if (-not $effectivePsVersion) {
+                $effectivePsVersion = '5.1'
+            }
+
+            $auditSession.CollectorPsVersion = $effectivePsVersion
+            $auditSession.AuditResults.CollectorPSVersion = $effectivePsVersion
 
             Write-AuditLog "Filtering collectors for PS $effectivePsVersion..." -Level Verbose
             $auditSession.CompatibleCollectors = Get-CompatibleCollectors `
@@ -1028,13 +1048,19 @@ function Invoke-ServerAudit {
                     $timeoutConfig = $null
                 }
 
+                $collectorPsVersion = if ($auditSession.CollectorPsVersion) {
+                    $auditSession.CollectorPsVersion
+                } else {
+                    $auditSession.LocalPSVersion
+                }
+
                 $collectorResults = Invoke-CollectorExecution `
                     -Server $server `
                     -Collectors $auditSession.CompatibleCollectors `
                     -Parallelism $serverResults.ParallelismUsed `
                     -TimeoutSeconds $serverResults.TimeoutUsed `
                     -TimeoutConfig $timeoutConfig `
-                    -PSVersion $auditSession.LocalPSVersion `
+                    -PSVersion $collectorPsVersion `
                     -IsSlowServer:($serverResults.PerformanceProfile.ResourceConstraints.Count -gt 0) `
                     -DryRun:$DryRun `
                     -CollectorPath $CollectorPath
@@ -1639,6 +1665,7 @@ function Export-AuditResults {
         if ($shouldExportFull) {
             $metaProperties = @(
                 @{ Name = 'PSVersion';           Value = $Results.PSVersion;           Depth = 2 },
+                        @{ Name = 'CollectorPSVersion';  Value = $Results.CollectorPSVersion;  Depth = 2 },
                 @{ Name = 'SessionId';           Value = $Results.SessionId;           Depth = 2 },
                 @{ Name = 'Timestamp';           Value = if ($Results.Timestamp) { [string]$Results.Timestamp } else { $null }; Depth = 2 },
                 @{ Name = 'Summary';             Value = if ($Results.Summary) { ConvertTo-HashtableRecursive -InputObject $Results.Summary } else { $null }; Depth = 8 },
@@ -1677,6 +1704,7 @@ function Export-AuditResults {
         else {
             $summaryOnly = [ordered]@{
                 PSVersion           = $Results.PSVersion
+                        CollectorPSVersion  = $Results.CollectorPSVersion
                 SessionId           = $Results.SessionId
                 Timestamp           = $Results.Timestamp
                 Summary             = $Results.Summary
