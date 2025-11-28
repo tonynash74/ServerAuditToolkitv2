@@ -396,12 +396,12 @@ function Update-AuditSummaryCounters {
 
     $Counters.TotalServers++
 
-    if ($ServerResult.Success) {
+    if ($null -ne $ServerResult.Success -and [bool]$ServerResult.Success) {
         $Counters.SuccessfulServers++
     }
-    else {
-        $Counters.FailedServers++
-    }
+
+    # Keep failed-server count in sync with total vs successful to avoid inflation when retries/logging occur
+    $Counters.FailedServers = [Math]::Max(0, $Counters.TotalServers - $Counters.SuccessfulServers)
 
     if ($ServerResult.CollectorsSummary) {
         $Counters.TotalCollectorsExecuted  += [int]($ServerResult.CollectorsSummary.Executed)
@@ -1122,12 +1122,14 @@ function Invoke-ServerAudit {
             }
 
             # Calculate summary statistics
-            $serverCollection = $auditSession.AuditResults.Servers
+            $serverCollection = @($auditSession.AuditResults.Servers)
             if ($serverCollection.Count -gt 0) {
+                $successfulServers = ($serverCollection | Where-Object { $_.Success -eq $true }).Count
+                $failedServers = $serverCollection.Count - $successfulServers
                 $auditSession.AuditResults.Summary = @{
                     TotalServers             = $serverCollection.Count
-                    SuccessfulServers        = ($serverCollection | Where-Object { $_.Success }).Count
-                    FailedServers            = ($serverCollection | Where-Object { -not $_.Success }).Count
+                    SuccessfulServers        = $successfulServers
+                    FailedServers            = $failedServers
                     TotalCollectorsExecuted  = ($serverCollection | ForEach-Object { $_.CollectorsSummary.Executed } | Measure-Object -Sum).Sum
                     TotalCollectorsSucceeded = ($serverCollection | ForEach-Object { $_.CollectorsSummary.Succeeded } | Measure-Object -Sum).Sum
                     TotalCollectorsFailed    = ($serverCollection | ForEach-Object { $_.CollectorsSummary.Failed } | Measure-Object -Sum).Sum
@@ -1136,10 +1138,12 @@ function Invoke-ServerAudit {
                 }
             }
             elseif ($auditSession.SummaryCounters.TotalServers -gt 0) {
+                $successfulServers = [int]$auditSession.SummaryCounters.SuccessfulServers
+                $failedServers = [Math]::Max(0, $auditSession.SummaryCounters.TotalServers - $successfulServers)
                 $auditSession.AuditResults.Summary = @{
                     TotalServers             = $auditSession.SummaryCounters.TotalServers
-                    SuccessfulServers        = $auditSession.SummaryCounters.SuccessfulServers
-                    FailedServers            = $auditSession.SummaryCounters.FailedServers
+                    SuccessfulServers        = $successfulServers
+                    FailedServers            = $failedServers
                     TotalCollectorsExecuted  = $auditSession.SummaryCounters.TotalCollectorsExecuted
                     TotalCollectorsSucceeded = $auditSession.SummaryCounters.TotalCollectorsSucceeded
                     TotalCollectorsFailed    = $auditSession.SummaryCounters.TotalCollectorsFailed
