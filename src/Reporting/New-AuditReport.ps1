@@ -413,19 +413,19 @@ function New-AuditReport {
                         <div class="card-grid">
                             <div class="card">
                                 <div class="card-title">Operating System</div>
-                                <div class="card-value">${osInfo.OSName}</div>
+                                <div class="card-value">$($osInfo.OSName)</div>
                             </div>
                             <div class="card">
                                 <div class="card-title">Service Pack</div>
-                                <div class="card-value">${osInfo.ServicePack}</div>
+                                <div class="card-value">$($osInfo.ServicePack)</div>
                             </div>
                             <div class="card">
                                 <div class="card-title">Processors</div>
-                                <div class="card-value">${osInfo.ProcessorCount}</div>
+                                <div class="card-value">$($osInfo.ProcessorCount)</div>
                             </div>
                             <div class="card">
                                 <div class="card-title">RAM</div>
-                                <div class="card-value">${[Math]::Round($osInfo.TotalMemoryMB / 1024, 1)} GB</div>
+                                <div class="card-value">$([Math]::Round($osInfo.TotalMemoryMB / 1024, 1)) GB</div>
                             </div>
                         </div>
                     </div>
@@ -451,17 +451,17 @@ function New-AuditReport {
                 <div class="card-grid">
                     <div class="card">
                         <div class="card-title">HOT Data (&lt;30 days)</div>
-                        <div class="card-value" style="color: #f44336;">${heatMap.Summary.HotData.Count} dirs</div>
+                        <div class="card-value" style="color: #f44336;">$($heatMap.Summary.HotData.Count) dirs</div>
                         <div style="font-size: 0.9em; color: #666;">$(if ($heatMap.Summary.HotData.Size -gt 1TB) { "$([Math]::Round($heatMap.Summary.HotData.Size / 1TB, 2)) TB" } else { "$([Math]::Round($heatMap.Summary.HotData.Size / 1GB, 2)) GB" })</div>
                     </div>
                     <div class="card">
                         <div class="card-title">WARM Data (30-180 days)</div>
-                        <div class="card-value" style="color: #ff9800;">${heatMap.Summary.WarmData.Count} dirs</div>
+                        <div class="card-value" style="color: #ff9800;">$($heatMap.Summary.WarmData.Count) dirs</div>
                         <div style="font-size: 0.9em; color: #666;">$(if ($heatMap.Summary.WarmData.Size -gt 1TB) { "$([Math]::Round($heatMap.Summary.WarmData.Size / 1TB, 2)) TB" } else { "$([Math]::Round($heatMap.Summary.WarmData.Size / 1GB, 2)) GB" })</div>
                     </div>
                     <div class="card">
                         <div class="card-title">COOL Data (&gt;180 days)</div>
-                        <div class="card-value" style="color: #2196f3;">${heatMap.Summary.CoolData.Count} dirs</div>
+                        <div class="card-value" style="color: #2196f3;">$($heatMap.Summary.CoolData.Count) dirs</div>
                         <div style="font-size: 0.9em; color: #666;">$(if ($heatMap.Summary.CoolData.Size -gt 1TB) { "$([Math]::Round($heatMap.Summary.CoolData.Size / 1TB, 2)) TB" } else { "$([Math]::Round($heatMap.Summary.CoolData.Size / 1GB, 2)) GB" })</div>
                     </div>
                 </div>
@@ -478,19 +478,19 @@ function New-AuditReport {
                 <div class="card-grid">
                     <div class="card $(if ($piiData.RecordCount -gt 0) { 'danger' } else { 'success' })">
                         <div class="card-title">PII Data Found</div>
-                        <div class="card-value $(if ($piiData.RecordCount -gt 0) { 'status-critical' } else { 'status-good' })">${piiData.RecordCount}</div>
+                        <div class="card-value $(if ($piiData.RecordCount -gt 0) { 'status-critical' } else { 'status-good' })">$($piiData.RecordCount)</div>
                     </div>
                     <div class="card $(if ($financialData.RecordCount -gt 0) { 'danger' } else { 'success' })">
                         <div class="card-title">Financial Data Found</div>
-                        <div class="card-value $(if ($financialData.RecordCount -gt 0) { 'status-critical' } else { 'status-good' })">${financialData.RecordCount}</div>
+                        <div class="card-value $(if ($financialData.RecordCount -gt 0) { 'status-critical' } else { 'status-good' })">$($financialData.RecordCount)</div>
                     </div>
                     <div class="card $(if ($certificates.Summary.ExpiredCertificates -gt 0) { 'warning' } else { 'success' })">
                         <div class="card-title">Expired Certificates</div>
-                        <div class="card-value $(if ($certificates.Summary.ExpiredCertificates -gt 0) { 'status-warning' } else { 'status-good' })">${certificates.Summary.ExpiredCertificates}</div>
+                        <div class="card-value $(if ($certificates.Summary.ExpiredCertificates -gt 0) { 'status-warning' } else { 'status-good' })">$($certificates.Summary.ExpiredCertificates)</div>
                     </div>
                     <div class="card $(if ($certificates.Summary.ExpiringWithinWarningDays -gt 0) { 'warning' } else { 'success' })">
                         <div class="card-title">Expiring Soon (&lt;30 days)</div>
-                        <div class="card-value $(if ($certificates.Summary.ExpiringWithinWarningDays -gt 0) { 'status-warning' } else { 'status-good' })">${certificates.Summary.ExpiringWithinWarningDays}</div>
+                        <div class="card-value $(if ($certificates.Summary.ExpiringWithinWarningDays -gt 0) { 'status-warning' } else { 'status-good' })">$($certificates.Summary.ExpiringWithinWarningDays)</div>
                     </div>
                 </div>
                 
@@ -498,13 +498,13 @@ function New-AuditReport {
                     <h3 style="margin-bottom: 10px;">Compliance Status</h3>
                     <p>
                         $(if ($piiData.RecordCount -gt 0) {
-                            "⚠️ <strong>CRITICAL</strong>: Personally identifiable information found in $($piiData.RecordCount) locations. Immediate remediation required."
+                            "&#9888; <strong>CRITICAL</strong>: Personally identifiable information found in $($piiData.RecordCount) locations. Immediate remediation required."
                         } elseif ($financialData.RecordCount -gt 0) {
-                            "⚠️ <strong>HIGH</strong>: UK financial data detected. FCA/PSD2 compliance review required."
+                            "&#9888; <strong>HIGH</strong>: UK financial data detected. FCA/PSD2 compliance review required."
                         } elseif ($certificates.Summary.ExpiredCertificates -gt 0) {
-                            "⚠️ <strong>MEDIUM</strong>: Expired SSL/TLS certificates detected. Reissue before migration."
+                            "&#9888; <strong>MEDIUM</strong>: Expired SSL/TLS certificates detected. Reissue before migration."
                         } else {
-                            "✓ <strong>COMPLIANT</strong>: No PII, financial data, or certificate issues detected."
+                            "&#10003; <strong>COMPLIANT</strong>: No PII, financial data, or certificate issues detected."
                         })
                     </p>
                 </div>
@@ -517,15 +517,15 @@ function New-AuditReport {
                 <div class="card-grid">
                     <div class="card">
                         <div class="card-title">Running Services</div>
-                        <div class="card-value">${services.Summary.RunningCount}</div>
+                        <div class="card-value">$($services.Summary.RunningCount)</div>
                     </div>
                     <div class="card">
                         <div class="card-title">Installed Applications</div>
-                        <div class="card-value">${apps.Summary.TotalApps}</div>
+                        <div class="card-value">$($apps.Summary.TotalApps)</div>
                     </div>
                     <div class="card">
                         <div class="card-title">Critical Services</div>
-                        <div class="card-value">${@($services.Data | Where-Object { $_.StartupType -eq 'Auto' }).Count}</div>
+                        <div class="card-value">$(@($services.Data | Where-Object { $_.StartupType -eq 'Auto' }).Count)</div>
                     </div>
                 </div>
             </div>
@@ -624,7 +624,7 @@ function New-AuditReport {
             datasets: [
                 {
                     label: 'Directories',
-                    data: [${heatMap.Summary.HotData.Count}, ${heatMap.Summary.WarmData.Count}, ${heatMap.Summary.CoolData.Count}],
+                    data: [$($heatMap.Summary.HotData.Count), $($heatMap.Summary.WarmData.Count), $($heatMap.Summary.CoolData.Count)],
                     backgroundColor: ['#f44336', '#ff9800', '#2196f3'],
                     borderColor: ['#d32f2f', '#e65100', '#1565c0'],
                     borderWidth: 2

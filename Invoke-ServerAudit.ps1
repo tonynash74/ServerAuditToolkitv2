@@ -170,74 +170,82 @@ param(
 )
 
 $moduleImported = $false
+$skipModuleBootstrap = $false
+if ($env:SAT_SKIP_SATV2_MODULE_IMPORT -eq '1') {
+    $skipModuleBootstrap = $true
+}
 
 # First, prefer an installed module import by name (normal user scenario)
-try {
-    Import-Module -Name 'ServerAuditToolkitV2' -ErrorAction Stop | Out-Null
-    $moduleImported = $true
-} catch {
-    # Not installed or failed import by name; we'll attempt local manifests next
-    $moduleImported = $false
-}
-
-if (-not $moduleImported) {
-    # Look for a local manifest in a few likely locations (script root, script root/src, parent)
-    $candidates = @(
-        Join-Path -Path $PSScriptRoot -ChildPath 'ServerAuditToolkitV2.psd1'
-        Join-Path -Path $PSScriptRoot -ChildPath 'src\ServerAuditToolkitV2.psd1'
-        Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'ServerAuditToolkitV2.psd1'
-    )
-
-    $foundManifest = $null
-    foreach ($cand in $candidates) {
-        if ($cand -and (Test-Path -LiteralPath $cand)) { $foundManifest = $cand; break }
+if (-not $skipModuleBootstrap) {
+    try {
+        Import-Module -Name 'ServerAuditToolkitV2' -ErrorAction Stop | Out-Null
+        $moduleImported = $true
+    } catch {
+        # Not installed or failed import by name; we'll attempt local manifests next
+        $moduleImported = $false
     }
 
-    if ($foundManifest) {
-        try {
-            Import-Module -Name $foundManifest -Force -ErrorAction Stop | Out-Null
-            Write-Verbose "Imported module from manifest: $foundManifest"
-            $moduleImported = $true
-        } catch {
-            Write-Warning "Failed to import ServerAuditToolkitV2 from local manifest '$foundManifest': $_"
-            $moduleImported = $false
+    if (-not $moduleImported) {
+        # Look for a local manifest in a few likely locations (script root, script root/src, parent)
+        $candidates = @(
+            Join-Path -Path $PSScriptRoot -ChildPath 'ServerAuditToolkitV2.psd1'
+            Join-Path -Path $PSScriptRoot -ChildPath 'src\ServerAuditToolkitV2.psd1'
+            Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'ServerAuditToolkitV2.psd1'
+        )
+
+        $foundManifest = $null
+        foreach ($cand in $candidates) {
+            if ($cand -and (Test-Path -LiteralPath $cand)) { $foundManifest = $cand; break }
+        }
+
+        if ($foundManifest) {
+            try {
+                Import-Module -Name $foundManifest -Force -ErrorAction Stop | Out-Null
+                Write-Verbose "Imported module from manifest: $foundManifest"
+                $moduleImported = $true
+            } catch {
+                Write-Warning "Failed to import ServerAuditToolkitV2 from local manifest '$foundManifest': $_"
+                $moduleImported = $false
+            }
         }
     }
-}
 
-if (-not $moduleImported) {
-    # Graceful guidance for users who manually deploy/copy the repo
-    $readmePathCandidates = @(
-        Join-Path -Path $PSScriptRoot -ChildPath 'README.md'
-        Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'README.md'
-    )
-    $readmePath = $readmePathCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $moduleImported) {
+        # Graceful guidance for users who manually deploy/copy the repo
+        $readmePathCandidates = @(
+            Join-Path -Path $PSScriptRoot -ChildPath 'README.md'
+            Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'README.md'
+        )
+        $readmePath = $readmePathCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-    $installScriptCandidates = @(
-        Join-Path -Path $PSScriptRoot -ChildPath 'Install-LocalModule.ps1'
-        Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'Install-LocalModule.ps1'
-    )
-    $installScript = $installScriptCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+        $installScriptCandidates = @(
+            Join-Path -Path $PSScriptRoot -ChildPath 'Install-LocalModule.ps1'
+            Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath 'Install-LocalModule.ps1'
+        )
+        $installScript = $installScriptCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-    Write-Host "`nERROR: Required module 'ServerAuditToolkitV2' is not installed or could not be loaded.`n" -ForegroundColor Red
-    Write-Host "To install/import the module locally, you have two options:" -ForegroundColor Yellow
-    if ($installScript) {
-        Write-Host "  1) From the repository root, run:" -ForegroundColor Cyan
-        Write-Host "       PowerShell -NoProfile -ExecutionPolicy Bypass -File `"$installScript`" -Force" -ForegroundColor Cyan
-    } else {
-        Write-Host "  1) Copy the module folder into a folder listed in `$env:PSModulePath` or run:" -ForegroundColor Cyan
-        Write-Host "       Import-Module '<full-path-to>\\ServerAuditToolkitV2.psd1'" -ForegroundColor Cyan
+        Write-Host "`nERROR: Required module 'ServerAuditToolkitV2' is not installed or could not be loaded.`n" -ForegroundColor Red
+        Write-Host "To install/import the module locally, you have two options:" -ForegroundColor Yellow
+        if ($installScript) {
+            Write-Host "  1) From the repository root, run:" -ForegroundColor Cyan
+            Write-Host "       PowerShell -NoProfile -ExecutionPolicy Bypass -File `"$installScript`" -Force" -ForegroundColor Cyan
+        } else {
+            Write-Host "  1) Copy the module folder into a folder listed in `$env:PSModulePath` or run:" -ForegroundColor Cyan
+            Write-Host "       Import-Module '<full-path-to>\\ServerAuditToolkitV2.psd1'" -ForegroundColor Cyan
+        }
+        if ($readmePath) {
+            Write-Host "`nSee the README for full guidance: $readmePath`n" -ForegroundColor Cyan
+        } else {
+            Write-Host "`nSee repository documentation for installation instructions.`n" -ForegroundColor Cyan
+        }
+
+        # Exit gracefully when running as a script; if running as a module import, allow import to continue.
+        if (-not $ExecutionContext.SessionState.Module) {
+            return
+        }
     }
-    if ($readmePath) {
-        Write-Host "`nSee the README for full guidance: $readmePath`n" -ForegroundColor Cyan
-    } else {
-        Write-Host "`nSee repository documentation for installation instructions.`n" -ForegroundColor Cyan
-    }
-
-    # Exit gracefully when running as a script; if running as a module import, allow import to continue.
-    if (-not $ExecutionContext.SessionState.Module) {
-        return
-    }
+} else {
+    Write-Verbose 'Skipping ServerAuditToolkitV2 auto-import (module wrapper invocation).'
 }
 
 # Load collector helper module once so orchestrator and runspaces share the same functions
@@ -268,6 +276,7 @@ $helperScripts = @(
     @{ RelativePath = 'src\Private\Invoke-BatchAudit.ps1'; MissingMessage = 'Batch processing will be unavailable.' },
     @{ RelativePath = 'src\Private\Invoke-WithRetry.ps1'; MissingMessage = 'Retry helper unavailable; transient errors will not auto-retry.' },
     @{ RelativePath = 'src\Private\Get-AdjustedTimeout.ps1'; MissingMessage = 'Collector-specific timeout adjustments will use defaults.' },
+    @{ RelativePath = 'src\Reporting\New-AuditReport.ps1'; MissingMessage = 'Executive HTML reporting will be unavailable.' },
     @{ RelativePath = 'src\Get-ServerCapabilities.ps1'; MissingMessage = 'Performance profiling (T2) will be unavailable.' }
 )
 
@@ -384,6 +393,189 @@ function Convert-ErrorsForExport {
     return $convertedErrors
 }
 
+function Get-SafeFileName {
+    param(
+        [Parameter(Mandatory=$false)][string]$Name,
+        [Parameter(Mandatory=$false)][string]$Default = 'Server'
+    )
+
+    if (-not $Name -or $Name.Trim().Length -eq 0) {
+        $Name = $Default
+    }
+
+    $safe = $Name -replace '[^A-Za-z0-9_\-]', '_'
+    if (-not $safe -or $safe.Trim().Length -eq 0) {
+        $safe = $Default
+    }
+
+    return $safe
+}
+
+function New-ReportIndexHtml {
+    param(
+        [Parameter(Mandatory=$true)][array]$Reports,
+        [Parameter(Mandatory=$true)][string]$OutputPath,
+        [Parameter(Mandatory=$false)][string]$CompanyName = 'IT Audit',
+        [Parameter(Mandatory=$false)][string]$Timestamp
+    )
+
+    if (-not $Reports -or $Reports.Count -eq 0) {
+        return
+    }
+
+    $rows = ''
+    foreach ($report in $Reports) {
+        $statusText = if ($report.Success) { 'Healthy' } else { 'Attention' }
+        $badgeColor = if ($report.Success) { '#4caf50' } else { '#ff9800' }
+        $score = if ($null -ne $report.ReadinessScore) { $report.ReadinessScore } else { 'n/a' }
+        $rows += "            <tr>\n                <td>$($report.ComputerName)</td>\n                <td>$score</td>\n                <td><span style='color:$badgeColor;font-weight:600;'>$statusText</span></td>\n                <td><a href='$($report.RelativePath)' target='_blank'>Open report</a></td>\n            </tr>\n"
+    }
+
+    $ts = if ($Timestamp) { $Timestamp } else { (Get-Date -Format 'yyyyMMdd_HHmmss') }
+
+    $html = @"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Audit Executive Summary</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6fb; margin: 0; padding: 40px; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 15px 40px rgba(0,0,0,0.08); padding: 40px; }
+        h1 { margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; }
+        th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid #e5e7f1; }
+        th { background: #f8f9ff; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.08em; }
+        tr:hover { background: #f5f7ff; }
+        .meta { color: #6b7280; font-size: 0.95rem; }
+        .meta span { margin-right: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Executive Summary – $CompanyName</h1>
+        <p class="meta">
+            <span>Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</span>
+            <span>Audit window: $ts</span>
+            <span>Servers: $($Reports.Count)</span>
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Readiness</th>
+                    <th>Status</th>
+                    <th>Report</th>
+                </tr>
+            </thead>
+            <tbody>
+$rows            </tbody>
+        </table>
+    </div>
+</body>
+</html>
+"@
+
+    $html | Out-File -LiteralPath $OutputPath -Encoding UTF8 -Force
+}
+
+function Publish-ServerReports {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][hashtable]$Results,
+        [Parameter(Mandatory=$true)][string]$OutputPath,
+        [Parameter(Mandatory=$true)][string]$Timestamp,
+        [Parameter(Mandatory=$false)][string]$CompanyName = 'IT Audit'
+    )
+
+    if (-not $Results -or -not $Results.Servers -or $Results.Servers.Count -eq 0) {
+        return @()
+    }
+
+    if (-not (Get-Command -Name New-AuditReport -ErrorAction SilentlyContinue)) {
+        Write-AuditLog 'New-AuditReport not available; skipping HTML generation.' -Level Warning
+        return @()
+    }
+
+    $reportsRoot = Join-Path -Path $OutputPath -ChildPath 'reports'
+    if (-not (Test-Path -LiteralPath $reportsRoot)) {
+        New-Item -ItemType Directory -Path $reportsRoot -Force | Out-Null
+    }
+
+    $manifest = @()
+    foreach ($serverResult in $Results.Servers) {
+        if (-not $serverResult) { continue }
+
+        $safeName = Get-SafeFileName -Name $serverResult.ComputerName -Default 'Server'
+        $filePrefix = if ($Timestamp) { "$Timestamp`_$safeName" } else { $safeName }
+        $serverJsonPath = Join-Path -Path $reportsRoot -ChildPath ($filePrefix + '.json')
+        $serverHtmlPath = Join-Path -Path $reportsRoot -ChildPath ($filePrefix + '.html')
+
+        $collectorPayload = @()
+        if ($serverResult.Collectors) {
+            foreach ($collector in $serverResult.Collectors) {
+                $recordCount = 0
+                if ($collector.Data -is [System.Collections.ICollection]) {
+                    $recordCount = $collector.Data.Count
+                } elseif ($collector.Data) {
+                    $recordCount = 1
+                }
+
+                $collectorPayload += @{
+                    CollectorName = $collector.Name
+                    DisplayName   = $collector.DisplayName
+                    Status        = $collector.Status
+                    ExecutionTime = $collector.ExecutionTime
+                    RecordCount   = $recordCount
+                    Data          = $collector.Data
+                    Summary       = if ($collector.Summary) { $collector.Summary } else { $null }
+                    Errors        = $collector.Errors
+                }
+            }
+        }
+
+        $reportPayload = [ordered]@{
+            ComputerName = $serverResult.ComputerName
+            Timestamp    = $serverResult.ExecutionEndTime
+            Summary      = $serverResult.CollectorsSummary
+            Data         = $collectorPayload
+        }
+
+        try {
+            $reportPayload | ConvertTo-Json -Depth 12 | Out-File -LiteralPath $serverJsonPath -Encoding UTF8 -Force
+        } catch {
+            Write-AuditLog "Failed to write report payload for $($serverResult.ComputerName): $_" -Level Warning
+            continue
+        }
+
+        $reportResult = $null
+        try {
+            $reportResult = New-AuditReport -AuditDataPath $serverJsonPath -OutputPath $serverHtmlPath -CompanyName $CompanyName -IncludeDrilldown
+        } catch {
+            Write-AuditLog "Failed to render HTML report for $($serverResult.ComputerName): $_" -Level Warning
+            continue
+        }
+
+        $relativePath = Join-Path 'reports' (Split-Path -Path $serverHtmlPath -Leaf)
+        $relativePath = $relativePath -replace '\\', '/'
+
+        $manifest += @{
+            ComputerName   = $serverResult.ComputerName
+            HtmlPath       = $serverHtmlPath
+            RelativePath   = $relativePath
+            ReadinessScore = if ($reportResult -and $reportResult.ReadinessScore) { $reportResult.ReadinessScore } else { $null }
+            Success        = if ($reportResult) { [bool]$reportResult.Success } else { $false }
+        }
+    }
+
+    if ($manifest.Count -gt 0) {
+        $null = New-ReportIndexHtml -Reports $manifest -OutputPath (Join-Path -Path $OutputPath -ChildPath 'report-index.html') -CompanyName $CompanyName -Timestamp $Timestamp
+    }
+
+    return $manifest
+}
+
 function Update-AuditSummaryCounters {
     param(
         [hashtable]$Counters,
@@ -415,7 +607,7 @@ function Update-AuditSummaryCounters {
 }
 
 function Invoke-ServerAudit {
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(DefaultParameterSetName='Default', SupportsShouldProcess=$true)]
     param(
         [Parameter(Mandatory=$false, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
         [Alias('Name', 'Server')]
@@ -424,6 +616,10 @@ function Invoke-ServerAudit {
 
         [Parameter(Mandatory=$false)]
         [string[]]$Collectors,
+
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('2.0', '4.0', '5.1', '7.0')]
+        [string]$CollectorPSVersion,
 
         [Parameter(Mandatory=$false)]
         [switch]$DryRun,
@@ -562,6 +758,11 @@ function Invoke-ServerAudit {
             }
         }
         $auditSession.Config = $config
+        $brandingName = 'IT Audit'
+        if ($config -and $config.branding -and $config.branding.companyName) {
+            $brandingName = [string]$config.branding.companyName
+        }
+        $auditSession.AuditResults.CompanyName = $brandingName
 
         # Resolve collector path
         # Support running the script from different working directories (e.g. a tools folder)
@@ -1745,6 +1946,19 @@ function Export-AuditResults {
         Write-AuditLog "Exported: $csvPath" -Level Verbose
     } catch {
         Write-AuditLog "Failed to export CSV: $_" -Level Warning
+    }
+
+    # Generate per-server HTML reports and index
+    if (-not $SkipServerDetails -and $hasServers -and $Results.Servers.Count -gt 0) {
+        try {
+            $companyName = if ($Results.CompanyName) { $Results.CompanyName } else { 'IT Audit' }
+            $reportManifest = Publish-ServerReports -Results $Results -OutputPath $OutputPath -Timestamp $timestamp -CompanyName $companyName
+            if ($reportManifest -and $reportManifest.Count -gt 0) {
+                Write-AuditLog "Generated $($reportManifest.Count) HTML report(s) at $(Join-Path $OutputPath 'reports')" -Level Information
+            }
+        } catch {
+            Write-AuditLog "Failed to generate HTML reports: $_" -Level Warning
+        }
     }
 
     # Display summary table

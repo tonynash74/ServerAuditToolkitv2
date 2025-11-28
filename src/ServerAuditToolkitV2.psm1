@@ -86,153 +86,145 @@ function Get-SATCapability {
   return $out
 }
 
-# ---------- Orchestrator ----------
-function Invoke-ServerAudit {
-  [CmdletBinding()]
+function ConvertTo-ScriptArgumentList {
   param(
-    [Parameter(Mandatory=$true)][string[]]$ComputerName,
-    [string]$OutDir,
-    [switch]$NoParallel,
-    [int]$Throttle = 4,
-    [string[]]$Include,
-    [string[]]$Exclude
+    [hashtable]$Parameters
   )
 
-  if (-not $OutDir -or $OutDir.Trim().Length -eq 0) {
-    $OutDir = Join-Path (Split-Path -Parent $script:ModuleRoot) 'out'
+  $list = @()
+  if (-not $Parameters) { return $list }
+
+  foreach ($key in $Parameters.Keys) {
+    $value = $Parameters[$key]
+    if ($value -is [System.Management.Automation.SwitchParameter]) {
+      if ($value.IsPresent) { $list += ('-{0}' -f $key) }
+      continue
+    }
+
+    if ($null -eq $value) { continue }
+
+    if (($value -is [System.Array]) -and -not ($value -is [string])) {
+      foreach ($item in $value) {
+        $list += ('-{0}' -f $key)
+        $list += $item
+      }
+      continue
+    }
+
+    $list += ('-{0}' -f $key)
+    $list += $value
   }
-  if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
 
-  $ts = (Get-Date).ToString('yyyyMMdd_HHmmss')
-  $global:SAT_LastTimestamp = $ts
+  return $list
+}
 
-  Write-Log Info ("[SAT] Starting audit for: {0}" -f ((@($ComputerName) -join ', ')))
+# ---------- Orchestrator ----------
+function Invoke-ServerAudit {
+  [CmdletBinding(DefaultParameterSetName='Default', SupportsShouldProcess=$true)]
+  param(
+    [Parameter(Mandatory=$false, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+    [Alias('Name', 'Server')]
+    [ValidateNotNullOrEmpty()]
+    [string[]]$ComputerName = @($env:COMPUTERNAME),
 
-  # Transcript (best-effort)
+    [Parameter(Mandatory=$false)]
+    [string[]]$Collectors,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateSet('2.0', '4.0', '5.1', '7.0')]
+    [string]$CollectorPSVersion,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$DryRun,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(0, 16)]
+    [int]$MaxParallelJobs = 0,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipPerformanceProfile,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$UseCollectorCache = $true,
+
+    [Parameter(Mandatory=$false)]
+    [string]$CollectorPath,
+
+    [Parameter(Mandatory=$false)]
+    [string]$OutputPath = (Join-Path -Path $PWD -ChildPath 'audit_results'),
+
+    [Parameter(Mandatory=$false)]
+    [ValidateSet('Verbose', 'Information', 'Warning', 'Error')]
+    [string]$LogLevel = 'Information',
+
+    [Parameter(Mandatory=$false)]
+    [switch]$UseBatchProcessing,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, 100)]
+    [int]$BatchSize = 10,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, 5)]
+    [int]$PipelineDepth = 2,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, 50)]
+    [int]$CheckpointInterval = 5,
+
+    [Parameter(Mandatory=$false)]
+    [string]$BatchOutputPath,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$EnableStreaming,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, 100)]
+    [int]$StreamBufferSize = 10,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(5, 300)]
+    [int]$StreamFlushIntervalSeconds = 30,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$EnableStreamingMemoryMonitoring,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(50, 1000)]
+    [int]$StreamingMemoryThresholdMB = 200,
+
+    [Parameter(Mandatory=$false)]
+    [string]$StreamOutputPath
+  )
+
+  $scriptCandidates = @(
+    Join-Path $script:ModuleInstallRoot 'Invoke-ServerAudit.ps1'
+    Join-Path $script:ModuleRoot 'Invoke-ServerAudit.ps1'
+    Join-Path (Split-Path -Parent $script:ModuleInstallRoot) 'Invoke-ServerAudit.ps1'
+  ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+  $scriptPath = $null
+  if ($scriptCandidates -and $scriptCandidates.Count -gt 0) {
+    $scriptPath = $scriptCandidates | Select-Object -First 1
+  }
+
+  if (-not $scriptPath) {
+    throw "Invoke-ServerAudit.ps1 could not be located relative to module root ($script:ModuleInstallRoot)."
+  }
+
+  $argumentList = ConvertTo-ScriptArgumentList -Parameters $PSBoundParameters
+
+  $previousSkip = $env:SAT_SKIP_SATV2_MODULE_IMPORT
   try {
-    $transPath = Join-Path $OutDir ("console_{0}.txt" -f $ts)
-    Start-Transcript -Path $transPath -Force | Out-Null
-  } catch {}
-
-  # Capability
-  Write-Log Info ("[{0}][Info] Capability probe on {1}" -f (Get-Date -f 'yyyy-MM-dd HH:mm:ss.fff'), (@($ComputerName) -join ', '))
-  $cap = Get-SATCapability -ComputerName $ComputerName
-
-  # Discover collectors (all Get-SAT* except capability)
-  $allCollectors = @()
-  $loaded = Get-Command -CommandType Function | Where-Object { $_.Name -like 'Get-SAT*' } | Select-Object -ExpandProperty Name
-  foreach ($n in $loaded) { if ($n -ne 'Get-SATCapability') { $allCollectors += $n } }
-  $allCollectors = $allCollectors | Sort-Object
-
-  # Include/Exclude
-  $collectorNames = @()
-  if ($Include -and $Include.Count -gt 0) {
-    foreach ($i in $Include) { if ($allCollectors -contains $i) { $collectorNames += $i } }
-  } else {
-    $collectorNames = $allCollectors
-  }
-  if ($Exclude -and $Exclude.Count -gt 0) {
-    $tmp = @()
-    foreach ($n in $collectorNames) { if ($Exclude -notcontains $n) { $tmp += $n } }
-    $collectorNames = $tmp
-  }
-
-  # Build run list
-  $results = @{}
-  $runItems = @()
-  foreach ($cn in $collectorNames) {
-    $runItems += @{
-      Name   = $cn
-      Script = {
-        param($fn,$targets,$capRef)
-        try {
-          Write-Log Info ("Collector: {0}" -f $fn)
-          $res = & $fn -ComputerName $targets -Capability $capRef
-          return @{ Name=$fn; Data=$res; Error=$null }
-        } catch {
-          return @{ Name=$fn; Data=$null; Error=$_.Exception.Message }
-        }
-      }
-      Args   = @($cn,$ComputerName,$cap)
-    }
-  }
-
-  if ($NoParallel) {
-    foreach ($it in $runItems) {
-      # PS2-safe: NO splatting. Pass positionally.
-      $arg0 = $it.Args[0]; $arg1 = $it.Args[1]; $arg2 = $it.Args[2]
-      $r = & $it.Script $arg0 $arg1 $arg2
-      if ($r.Error) { Write-Log Error ("{0} failed: {1}" -f $r.Name,$r.Error) }
-      $results[$r.Name] = $r.Data
-    }
-  } else {
-    if (Get-Command Invoke-RunspaceTasks -ErrorAction SilentlyContinue) {
-      $jobs = @()
-      foreach ($it in $runItems) {
-        $jobs += @{ ScriptBlock = $it.Script; Arguments = $it.Args }
-      }
-      $out = Invoke-RunspaceTasks -Tasks $jobs -Throttle $Throttle
-      foreach ($r in $out) {
-        if ($r -and $r.Name) {
-          if ($r.Error) { Write-Log Error ("{0} failed: {1}" -f $r.Name,$r.Error) }
-          $results[$r.Name] = $r.Data
-        }
-      }
+    $env:SAT_SKIP_SATV2_MODULE_IMPORT = '1'
+    return & $scriptPath @argumentList
+  } finally {
+    if ($null -eq $previousSkip) {
+      Remove-Item Env:SAT_SKIP_SATV2_MODULE_IMPORT -ErrorAction SilentlyContinue
     } else {
-      # Fallback sequential (PS2-safe)
-      foreach ($it in $runItems) {
-        $arg0 = $it.Args[0]; $arg1 = $it.Args[1]; $arg2 = $it.Args[2]
-        $r = & $it.Script $arg0 $arg1 $arg2
-        if ($r.Error) { Write-Log Error ("{0} failed: {1}" -f $r.Name,$r.Error) }
-        $results[$r.Name] = $r.Data
-      }
+      $env:SAT_SKIP_SATV2_MODULE_IMPORT = $previousSkip
     }
   }
-
-  # Persist raw dataset
-  try {
-    $base = Join-Path $OutDir ("data_{0}" -f $ts)
-    if (Get-Command Export-SATData -ErrorAction SilentlyContinue) {
-      $null = Export-SATData -Object $results -PathBase $base -Depth 6
-    } else {
-      $results | Export-Clixml -Path ($base + '.clixml')
-    }
-  } catch {
-    Write-Log Warn ("[SAT] Could not persist data: {0}" -f $_.Exception.Message)
-  }
-
-  # Migration units & readiness
-  $units=@(); $rules=@(); $findings=@()
-  if (Get-Command New-SATMigrationUnits -ErrorAction SilentlyContinue) {
-    try { $units = New-SATMigrationUnits -Data $results } catch { Write-Log Warn ("Units failed: {0}" -f $_.Exception.Message) }
-  }
-  if (Get-Command Get-SATDefaultReadinessRules -ErrorAction SilentlyContinue) { try { $rules = Get-SATDefaultReadinessRules } catch {} }
-  if ($units -and $rules -and (Get-Command Evaluate-SATReadiness -ErrorAction SilentlyContinue)) {
-    try { $findings = Evaluate-SATReadiness -Units $units -Rules $rules } catch { Write-Log Warn ("Readiness failed: {0}" -f $_.Exception.Message) }
-  }
-
-  # Save MU/Findings CSVs
-  try {
-    $csvDir = Join-Path $OutDir 'csv'
-    if (-not (Test-Path $csvDir)) { New-Item -ItemType Directory -Force -Path $csvDir | Out-Null }
-    if ($units -and (Get-Command Write-SATCsv -ErrorAction SilentlyContinue)) {
-      Write-SATCsv -OutDir $csvDir -Name 'migration_units' -Rows ($units | Select Id,Kind,Server,Name,Summary,Confidence)
-    }
-    if ($findings -and (Get-Command Write-SATCsv -ErrorAction SilentlyContinue)) {
-      Write-SATCsv -OutDir $csvDir -Name 'readiness_findings' -Rows ($findings | Select Severity,RuleId,Server,Kind,Name,Message,UnitId)
-    }
-  } catch {}
-
-  # Report
-  if (Get-Command New-SATReport -ErrorAction SilentlyContinue) {
-    try { $null = New-SATReport -Data $results -Units $units -Findings $findings -OutDir $OutDir -Timestamp $ts } catch { Write-Log Error ("Report failed: {0}" -f $_.Exception.Message) }
-  }
-
-  # Stop transcript
-  try { Stop-Transcript | Out-Null } catch {}
-
-  Write-Log Info ("[SAT] Done. See outputs in {0}" -f $OutDir)
-  return $results
 }
 
 # Note: collectors and private helpers are dot-sourced above from the 'Private' and 'Collectors' folders.
