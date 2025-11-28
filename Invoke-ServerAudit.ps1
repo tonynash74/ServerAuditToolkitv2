@@ -966,7 +966,7 @@ function Invoke-ServerAudit {
             # Filter by user selection
             if ($Collectors.Count -gt 0) {
                 Write-AuditLog "Filtering by user selection: $($Collectors -join ', ')" -Level Verbose
-                $auditSession.CompatibleCollectors = $auditSession.CompatibleCollectors | Where-Object { $_.name -in $Collectors }
+                $auditSession.CompatibleCollectors = $auditSession.CompatibleCollectors | Where-Object { $Collectors -contains $_.name }
 
                 if ($auditSession.CompatibleCollectors.Count -eq 0) {
                     throw "No compatible collectors match user selection: $($Collectors -join ', ')"
