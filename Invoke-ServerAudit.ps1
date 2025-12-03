@@ -1311,7 +1311,7 @@ function Invoke-ServerAudit {
                             Write-AuditLog "Cleared performance profile cache for $server" -Level Verbose
                         }
                     } catch {
-                        Write-AuditLog "Failed to clear performance profile cache for $server: $_" -Level Warning
+                        Write-AuditLog "Failed to clear performance profile cache for ${server}: $_" -Level Warning
                     }
                 }
             }
