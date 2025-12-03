@@ -1002,7 +1002,11 @@ function Invoke-ServerAudit {
         # Validate input parameters early
         try {
             Write-AuditLog "Validating input parameters..." -Level Verbose
-            Test-AuditParameters -ComputerName $ComputerName
+            if (Get-Command -Name 'Test-AuditParameters' -ErrorAction SilentlyContinue) {
+                Test-AuditParameters -ComputerName $ComputerName
+            } else {
+                Write-AuditLog "Skipping parameter validation: helper 'Test-AuditParameters' not loaded" -Level Warning
+            }
         } catch {
             Write-AuditLog "Parameter validation failed: $_" -Level Error
             throw
