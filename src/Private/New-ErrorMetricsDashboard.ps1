@@ -148,7 +148,7 @@ function New-ErrorMetricsDashboard {
                 }
 
                 # Affected servers
-                if ($error.Server -notin $dashboard.AffectedServers) {
+                if ($dashboard.AffectedServers -notcontains $error.Server) {
                     $dashboard.AffectedServers += $error.Server
                 }
             }

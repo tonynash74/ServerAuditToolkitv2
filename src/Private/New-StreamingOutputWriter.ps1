@@ -9,58 +9,50 @@
     and optionally monitoring process memory to auto-throttle buffers.
 #>
 
-class StreamingOutputWriter {
-    [string]$OutputPath
-    [int]$BufferSize
-    [int]$OriginalBufferSize
-    [int]$FlushIntervalSeconds
-    [bool]$EnableMemoryMonitoring
-    [int]$MemoryThresholdMB
-    [System.Collections.Generic.List[psobject]]$ResultBuffer
-    [int]$TotalResultsWritten
-    [int]$TotalFlushes
-    [datetime]$LastFlushTime
-    [bool]$IsFinalized
-    [System.IO.StreamWriter]$StreamWriter
-    [string]$StreamFile
-    [double]$PeakMemoryMB
-    [datetime]$StartTime
-    [double]$ResultsPerSecond
-    [System.Diagnostics.Stopwatch]$Stopwatch
+function New-StreamingWriterInternal {
+    param(
+        [Parameter(Mandatory=$true)][string]$OutputPath,
+        [Parameter(Mandatory=$true)][int]$BufferSize,
+        [Parameter(Mandatory=$true)][int]$FlushIntervalSeconds,
+        [Parameter(Mandatory=$true)][bool]$EnableMemoryMonitoring,
+        [Parameter(Mandatory=$true)][int]$MemoryThresholdMB
+    )
 
-    StreamingOutputWriter(
-        [string]$outputPath,
-        [int]$bufferSize,
-        [int]$flushIntervalSeconds,
-        [bool]$enableMemoryMonitoring,
-        [int]$memoryThresholdMB
-    ) {
-        if (-not (Test-Path -LiteralPath $outputPath)) {
-            New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
-        }
-
-        $this.OutputPath = (Resolve-Path -LiteralPath $outputPath).Path
-        $this.BufferSize = $bufferSize
-        $this.OriginalBufferSize = $bufferSize
-        $this.FlushIntervalSeconds = $flushIntervalSeconds
-        $this.EnableMemoryMonitoring = $enableMemoryMonitoring
-        $this.MemoryThresholdMB = $memoryThresholdMB
-        $this.ResultBuffer = New-Object System.Collections.Generic.List[psobject]
-        $this.TotalResultsWritten = 0
-        $this.TotalFlushes = 0
-        $this.LastFlushTime = Get-Date
-        $this.IsFinalized = $false
-        $this.PeakMemoryMB = 0
-        $this.StartTime = Get-Date
-        $this.ResultsPerSecond = 0
-        $this.Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
-        $timestamp = '{0:yyyyMMdd-HHmmss-fff}-{1}' -f (Get-Date), (Get-Random -Maximum 10000)
-        $this.StreamFile = Join-Path $this.OutputPath "stream_$timestamp.jsonl"
-        $this.StreamWriter = [System.IO.StreamWriter]::new($this.StreamFile, $true, [System.Text.Encoding]::UTF8)
+    if (-not (Test-Path -LiteralPath $OutputPath)) {
+        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
     }
 
-    [void] AddResult([psobject]$Result) {
+    $resolvedOutputPath = (Resolve-Path -LiteralPath $OutputPath).Path
+    $resultBuffer = New-Object System.Collections.Generic.List[psobject]
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    $timestamp = '{0:yyyyMMdd-HHmmss-fff}-{1}' -f (Get-Date), (Get-Random -Maximum 10000)
+    $streamFile = Join-Path $resolvedOutputPath "stream_$timestamp.jsonl"
+    $streamWriter = New-Object System.IO.StreamWriter($streamFile, $true, [System.Text.Encoding]::UTF8)
+
+    $writer = [PSCustomObject]@{
+        OutputPath          = $resolvedOutputPath
+        BufferSize          = $BufferSize
+        OriginalBufferSize  = $BufferSize
+        FlushIntervalSeconds= $FlushIntervalSeconds
+        EnableMemoryMonitoring = $EnableMemoryMonitoring
+        MemoryThresholdMB   = $MemoryThresholdMB
+        ResultBuffer        = $resultBuffer
+        TotalResultsWritten = 0
+        TotalFlushes        = 0
+        LastFlushTime       = Get-Date
+        IsFinalized         = $false
+        StreamWriter        = $streamWriter
+        StreamFile          = $streamFile
+        PeakMemoryMB        = 0
+        StartTime           = Get-Date
+        ResultsPerSecond    = 0
+        Stopwatch           = $stopwatch
+    }
+
+    $writer | Add-Member -MemberType ScriptMethod -Name AddResult -Value {
+        param($Result)
+
         if ($this.IsFinalized) {
             throw 'finalized'
         }
@@ -74,7 +66,9 @@ class StreamingOutputWriter {
         $shouldFlush = $this.ResultBuffer.Count -ge $this.BufferSize
         if (-not $shouldFlush -and $this.FlushIntervalSeconds -gt 0) {
             $elapsed = ((Get-Date) - $this.LastFlushTime).TotalSeconds
-            $shouldFlush = $elapsed -ge $this.FlushIntervalSeconds
+            if ($elapsed -ge $this.FlushIntervalSeconds) {
+                $shouldFlush = $true
+            }
         }
 
         if ($shouldFlush) {
@@ -92,9 +86,9 @@ class StreamingOutputWriter {
                 Write-Host "[MEMORY] Reduced buffer size to $($this.BufferSize) (Memory: $([math]::Round($currentMemoryMB, 2)) MB)" -ForegroundColor Yellow
             }
         }
-    }
+    } | Out-Null
 
-    [void] Flush() {
+    $writer | Add-Member -MemberType ScriptMethod -Name Flush -Value {
         if ($this.ResultBuffer.Count -eq 0) {
             return
         }
@@ -114,9 +108,9 @@ class StreamingOutputWriter {
         if ($elapsed -gt 0) {
             $this.ResultsPerSecond = $this.TotalResultsWritten / $elapsed
         }
-    }
+    } | Out-Null
 
-    [string] Finalize() {
+    $writer | Add-Member -MemberType ScriptMethod -Name Finalize -Value {
         if ($this.IsFinalized) {
             return $this.StreamFile
         }
@@ -136,9 +130,9 @@ class StreamingOutputWriter {
 
         $this.IsFinalized = $true
         return $this.StreamFile
-    }
+    } | Out-Null
 
-    [pscustomobject] GetStatistics() {
+    $writer | Add-Member -MemberType ScriptMethod -Name GetStatistics -Value {
         $elapsedSeconds = $this.Stopwatch.Elapsed.TotalSeconds
         if ($elapsedSeconds -lt 0.01) {
             $elapsedSeconds = 0.01
@@ -149,7 +143,7 @@ class StreamingOutputWriter {
             $calculatedResultsPerSecond = $this.TotalResultsWritten / $elapsedSeconds
         }
 
-        return [PSCustomObject]@{
+        [PSCustomObject]@{
             OutputPath          = $this.OutputPath
             StreamFile          = $this.StreamFile
             TotalResultsWritten = $this.TotalResultsWritten
@@ -161,7 +155,9 @@ class StreamingOutputWriter {
             ElapsedSeconds      = [Math]::Round($elapsedSeconds, 2)
             IsFinalized         = $this.IsFinalized
         }
-    }
+    } | Out-Null
+
+    return $writer
 }
 
 function New-StreamingOutputWriter {
@@ -187,13 +183,12 @@ function New-StreamingOutputWriter {
         [int]$MemoryThresholdMB = 200
     )
 
-    [StreamingOutputWriter]::new(
-        $OutputPath,
-        $BufferSize,
-        $FlushIntervalSeconds,
-        [bool]$EnableMemoryMonitoring,
-        $MemoryThresholdMB
-    )
+    New-StreamingWriterInternal `
+        -OutputPath $OutputPath `
+        -BufferSize $BufferSize `
+        -FlushIntervalSeconds $FlushIntervalSeconds `
+        -EnableMemoryMonitoring ([bool]$EnableMemoryMonitoring) `
+        -MemoryThresholdMB $MemoryThresholdMB
 }
 
 function Read-StreamedResults {

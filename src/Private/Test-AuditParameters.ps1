@@ -115,7 +115,7 @@ function Test-AuditParameters {
         }
 
         # Validate format (lenient - warn on suspicious, but don't fail)
-        $isLocalhost = $computer -in $localhostIndicators -or $computer -eq '.' -or $computer -eq 'localhost'
+        $isLocalhost = ($localhostIndicators -contains $computer) -or $computer -eq '.' -or $computer -eq 'localhost'
         $isValidFqdn = $computer -match $fqdnPattern
         $isIpAddress = $computer -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$' -or $computer -match '^[a-fA-F0-9:]+$'
 
